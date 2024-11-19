@@ -3,24 +3,31 @@ from model import TradingAgent
 import time
 from collections import deque
 import random
+import sys
+sys.path.append('..')  # Add parent directory to path
+from backtest.data_provider import DataProvider
+from backtest.plot_candlesticks import plot_candlesticks
 
 class TrainingEnvironment:
-    def __init__(self, screenshots_dir, model_save_dir="saved_models"):
+    def __init__(self, data_path="backtest/data/btc/5min/dev.csv", model_save_dir="saved_models"):
         self.agent = TradingAgent()
-        self.screenshots_dir = screenshots_dir
+        self.data_provider = DataProvider(data_path)
         self.model_save_dir = model_save_dir
         self.memory = deque(maxlen=1000)  # Store recent experiences
         self.episode_rewards = []
         
         os.makedirs(model_save_dir, exist_ok=True)
     
-    def get_latest_screenshots(self, n=5):
-        """Get the n most recent screenshots"""
-        screenshots = []
-        for file in sorted(os.listdir(self.screenshots_dir))[-n:]:
-            if file.endswith('.png'):
-                screenshots.append(os.path.join(self.screenshots_dir, file))
-        return screenshots
+    def get_latest_screenshots(self):
+        """Get the latest market data as a PNG screenshot"""
+        # Get next window of 200 entries from data provider
+        window = self.data_provider.get_next_window()
+        if window is None:
+            return None
+            
+        # Generate PNG screenshot from the data
+        png_data = plot_candlesticks(window, num_entries=200)
+        return png_data
     
     def calculate_reward(self, decision, minutes, actual_outcome):
         """
@@ -41,15 +48,14 @@ class TrainingEnvironment:
         episode_rewards = []
         
         for _ in range(num_steps):
-            # Get latest screenshots
-            screenshots = self.get_latest_screenshots()
-            if not screenshots:
-                time.sleep(1)
-                continue
+            # Get latest screenshot
+            screenshot_data = self.get_latest_screenshots()
+            if screenshot_data is None:
+                print("No more data available")
+                break
             
             # Make prediction
-            latest_screenshot = screenshots[-1]
-            decision, minutes = self.agent.predict(latest_screenshot)
+            decision, minutes = self.agent.predict(screenshot_data)
             
             # In a real environment, you would wait for actual outcome
             # For this example, we'll simulate it
@@ -62,7 +68,7 @@ class TrainingEnvironment:
             episode_rewards.append(reward)
             
             # Store experience
-            self.memory.append((latest_screenshot, reward))
+            self.memory.append((screenshot_data, reward))
             
             # Train on a batch of experiences
             if len(self.memory) >= 32:
@@ -73,18 +79,19 @@ class TrainingEnvironment:
             time.sleep(1)  # Wait before next prediction
         
         # Save model after episode
-        avg_reward = sum(episode_rewards) / len(episode_rewards)
-        self.episode_rewards.append(avg_reward)
-        
-        model_path = os.path.join(self.model_save_dir, 
-                                 f'model_reward_{avg_reward:.2f}.pth')
-        self.agent.save_model(model_path)
-        
-        return avg_reward
+        if episode_rewards:
+            avg_reward = sum(episode_rewards) / len(episode_rewards)
+            self.episode_rewards.append(avg_reward)
+            
+            model_path = os.path.join(self.model_save_dir, 
+                                     f'model_reward_{avg_reward:.2f}.pth')
+            self.agent.save_model(model_path)
+            
+            return avg_reward
+        return 0.0
 
 def main():
-    screenshots_dir = "../screenshots/gatherer"  # Adjust path as needed
-    env = TrainingEnvironment(screenshots_dir)
+    env = TrainingEnvironment()
     
     num_episodes = 10
     for episode in range(num_episodes):
