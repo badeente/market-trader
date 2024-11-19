@@ -5,11 +5,11 @@ from collections import deque
 import random
 import sys
 sys.path.append('..')  # Add parent directory to path
-from backtest.data_provider import DataProvider
-from backtest.plot_candlesticks import plot_candlesticks
+from backtester.data_provider import DataProvider
+from backtester.plot_candlesticks import plot_candlesticks
 
 class TrainingEnvironment:
-    def __init__(self, data_path="backtest/data/btc/5min/dev.csv", model_save_dir="saved_models"):
+    def __init__(self, data_path="backtest//data//btc//5min//dev.csv", model_save_dir="saved_models"):
         self.agent = TradingAgent()
         self.data_provider = DataProvider(data_path)
         self.model_save_dir = model_save_dir
@@ -29,19 +29,17 @@ class TrainingEnvironment:
         png_data = plot_candlesticks(window, num_entries=200)
         return png_data
     
-    def calculate_reward(self, decision, minutes, actual_outcome):
+    def calculate_reward(self, predicted_action, actual_action):
         """
-        Calculate reward based on the accuracy of prediction
-        actual_outcome should be a tuple of (actual_direction, actual_minutes)
+        Calculate reward based on prediction accuracy
+        Actions: 0=cancel, 1=long, 2=short
         """
-        direction_reward = 1 if decision == actual_outcome[0] else -1
-        
-        # Calculate minutes reward based on how close the prediction was
-        minutes_diff = abs(minutes - actual_outcome[1])
-        minutes_reward = max(0, 1 - minutes_diff/10)  # Scale down penalty for minute differences
-        
-        total_reward = direction_reward + minutes_reward
-        return total_reward
+        if predicted_action == actual_action:
+            return 1.0  # Correct prediction
+        elif predicted_action == 0 or actual_action == 0:
+            return -0.5  # Less penalty for cancel-related mistakes
+        else:
+            return -1.0  # Wrong direction (long vs short)
     
     def train_episode(self, num_steps=100):
         """Train for one episode"""
@@ -55,26 +53,25 @@ class TrainingEnvironment:
                 break
             
             # Make prediction
-            decision, minutes = self.agent.predict(screenshot_data)
+            predicted_action = self.agent.predict(screenshot_data)
             
             # In a real environment, you would wait for actual outcome
             # For this example, we'll simulate it
             # You should replace this with actual market data
-            actual_outcome = ("green" if random.random() > 0.5 else "red", 
-                            random.randint(1, 10))
+            actual_action = random.randint(0, 2)  # 0=cancel, 1=long, 2=short
             
             # Calculate reward
-            reward = self.calculate_reward(decision, minutes, actual_outcome)
+            reward = self.calculate_reward(predicted_action, actual_action)
             episode_rewards.append(reward)
             
-            # Store experience
-            self.memory.append((screenshot_data, reward))
+            # Store experience and train
+            self.memory.append((screenshot_data, actual_action))
             
             # Train on a batch of experiences
             if len(self.memory) >= 32:
                 batch = random.sample(self.memory, 32)
-                for screenshot, reward in batch:
-                    loss = self.agent.train_step(screenshot, reward)
+                for screenshot, action in batch:
+                    loss = self.agent.train_step(screenshot, action)
             
             time.sleep(1)  # Wait before next prediction
         

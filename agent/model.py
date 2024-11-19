@@ -3,6 +3,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
+import os
 
 class TradingModel(nn.Module):
     def __init__(self):
@@ -37,19 +38,15 @@ class TradingModel(nn.Module):
             nn.ReLU()
         )
         
-        # Output layers
-        self.decision_head = nn.Linear(32, 2)  # Red/Green decision
-        self.minutes_head = nn.Linear(32, 1)   # Minutes prediction
+        # Output layer for 3-class prediction (0=cancel, 1=long, 2=short)
+        self.action_head = nn.Linear(32, 3)
         
     def forward(self, x):
         x = self.cnn(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-        
-        decision = torch.softmax(self.decision_head(x), dim=1)
-        minutes = torch.relu(self.minutes_head(x))  # Ensure positive minutes
-        
-        return decision, minutes
+        action_probs = torch.softmax(self.action_head(x), dim=1)
+        return action_probs
 
 class TradingAgent:
     def __init__(self, model_path=None):
@@ -66,8 +63,7 @@ class TradingAgent:
             self.model.load_state_dict(torch.load(model_path))
         
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
-        self.decision_criterion = nn.CrossEntropyLoss()
-        self.minutes_criterion = nn.MSELoss()
+        self.criterion = nn.CrossEntropyLoss()
         
     def preprocess_screenshot(self, screenshot_path):
         image = Image.open(screenshot_path).convert('RGB')
@@ -78,25 +74,20 @@ class TradingAgent:
         self.model.eval()
         with torch.no_grad():
             image = self.preprocess_screenshot(screenshot_path)
-            decision_probs, minutes = self.model(image)
-            
-            decision_idx = torch.argmax(decision_probs, dim=1).item()
-            decision = "green" if decision_idx == 1 else "red"
-            minutes = int(minutes.item())
-            
-            return decision, minutes
+            action_probs = self.model(image)
+            action = torch.argmax(action_probs, dim=1).item()
+            return action
     
-    def train_step(self, screenshot_path, reward):
+    def train_step(self, screenshot_path, target_action):
         self.model.train()
         image = self.preprocess_screenshot(screenshot_path)
         
         # Forward pass
-        decision_probs, minutes = self.model(image)
+        action_probs = self.model(image)
         
-        # Calculate loss based on reward
-        # This is a simple example - you might want to modify this based on your specific needs
-        loss = -torch.log(decision_probs) * reward
-        loss = loss.mean()
+        # Calculate loss
+        target = torch.tensor([target_action], device=self.device)
+        loss = self.criterion(action_probs, target)
         
         # Backward pass
         self.optimizer.zero_grad()
