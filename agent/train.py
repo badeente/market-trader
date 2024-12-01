@@ -33,11 +33,11 @@ def main():
         )
         
         # Run just one episode to verify screenshot counting
-        num_episodes = 1
+        num_episodes = 2
         for episode in range(num_episodes):
             logger.info(f"Starting episode {episode + 1}/{num_episodes}")
             
-            avg_reward, train_loss, val_loss, final_equity = env.train_episode(episode, num_steps=200)
+            avg_reward, train_loss, val_loss, final_equity = env.train_episode(episode, num_steps=400)
             
             logger.info(
                 f"Episode {episode + 1} completed:\n"

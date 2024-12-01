@@ -20,17 +20,65 @@ logger = logging.getLogger(__name__)
 
 # Constants
 INITIAL_EQUITY = 10000.0
-DEFAULT_RISK_PER_TRADE = 0.0001  # 2% risk per trade
+DEFAULT_RISK_PER_TRADE = 0.001  # Changed from 0.0001 to 0.001 (0.1% risk per trade)
 VALIDATION_FREQUENCY = 5  # Validate every N batches
 VALIDATION_SUBSET_SIZE = 0.2  # Use 20% of validation data
 VALIDATION_EARLY_STOP_THRESHOLD = 1.5  # Stop validation if loss is 1.5x worse than best
+MIN_STOP_LOSS_PCT = 0.001  # Minimum 0.1% stop loss
+DEFAULT_STOP_LOSS_PCT = 0.02  # Default 2% stop loss if none provided
+
+def get_safe_value(params, key, default=DEFAULT_STOP_LOSS_PCT):
+    """Safely get a value from trade parameters"""
+    try:
+        value = params.get(key)
+        if value is None or np.isnan(value):
+            logger.warning(f"Invalid {key}: {value}, using default {default}")
+            return default
+        return value
+    except Exception as e:
+        logger.error(f"Error getting {key}: {e}")
+        return default
 
 class Position:
-    def __init__(self, position_type, entry_price, stop_loss_pct, take_profit_pct):
+    def __init__(self, position_type, entry_price, stop_loss_pct, take_profit_pct=None):
         self.type = position_type  # 0=long, 1=short
         self.entry_price = entry_price
-        self.stop_loss_price = entry_price * (1 - stop_loss_pct/100) if position_type == 0 else entry_price * (1 + stop_loss_pct/100)
-        self.take_profit_price = entry_price * (1 + take_profit_pct/100) if position_type == 0 else entry_price * (1 - take_profit_pct/100)
+        
+        try:
+            # Ensure stop_loss_pct is a valid float
+            stop_loss_pct = float(stop_loss_pct)
+            
+            # If percentage is given as whole number (e.g. 2 for 2%), convert to decimal
+            if stop_loss_pct > 1:
+                stop_loss_pct = stop_loss_pct / 100.0
+            
+            # Ensure minimum stop loss percentage
+            stop_loss_pct = max(stop_loss_pct, MIN_STOP_LOSS_PCT)
+            
+            # If stop loss is somehow invalid, use default
+            if stop_loss_pct <= 0 or np.isnan(stop_loss_pct):
+                logger.warning(f"Invalid stop loss {stop_loss_pct}, using default {DEFAULT_STOP_LOSS_PCT}")
+                stop_loss_pct = DEFAULT_STOP_LOSS_PCT
+            
+            # Set stop loss based on input percentage
+            self.stop_loss_price = entry_price * (1 - stop_loss_pct) if position_type == 0 else entry_price * (1 + stop_loss_pct)
+            
+            # Force take profit to be 2x the stop loss
+            actual_take_profit_pct = stop_loss_pct * 2
+            self.take_profit_price = entry_price * (1 + actual_take_profit_pct) if position_type == 0 else entry_price * (1 - actual_take_profit_pct)
+            
+            logger.info(f"Position created: Type={'Long' if position_type==0 else 'Short'}, "
+                       f"Entry={entry_price:.2f}, SL={self.stop_loss_price:.2f} ({stop_loss_pct*100:.2f}%), "
+                       f"TP={self.take_profit_price:.2f} ({actual_take_profit_pct*100:.2f}%)")
+            
+        except Exception as e:
+            logger.error(f"Error setting position parameters: {e}")
+            # Use default values if there's an error
+            stop_loss_pct = DEFAULT_STOP_LOSS_PCT
+            self.stop_loss_price = entry_price * (1 - stop_loss_pct) if position_type == 0 else entry_price * (1 + stop_loss_pct)
+            actual_take_profit_pct = stop_loss_pct * 2
+            self.take_profit_price = entry_price * (1 + actual_take_profit_pct) if position_type == 0 else entry_price * (1 - actual_take_profit_pct)
+            
         self.entry_time = time.time()
     
     def check_exit_conditions(self, current_price):
@@ -48,20 +96,11 @@ class Position:
         return False, None
 
 class TrainingEnvironment:
-    def __init__(self, 
-                 train_data_path,
-                 val_data_path,
-                 model_save_dir,
-                 batch_size=32,
-                 memory_size=10000,
-                 risk_per_trade=DEFAULT_RISK_PER_TRADE,
-                 screenshot_cache_size=1000,
-                 validation_frequency=VALIDATION_FREQUENCY,
-                 validation_subset_size=VALIDATION_SUBSET_SIZE,
+    def __init__(self, train_data_path, val_data_path, model_save_dir, batch_size=16, memory_size=10000,
+                 risk_per_trade=DEFAULT_RISK_PER_TRADE, screenshot_cache_size=1000,
+                 validation_frequency=VALIDATION_FREQUENCY, validation_subset_size=VALIDATION_SUBSET_SIZE,
                  validation_early_stop_threshold=VALIDATION_EARLY_STOP_THRESHOLD):
-        """
-        Initialize the training environment with configurable parameters
-        """
+        """Initialize the training environment with configurable parameters"""
         logger.info(f"Initializing training environment...")
         
         # Initialize performance profiler with log directory
@@ -114,7 +153,7 @@ class TrainingEnvironment:
         self.episode_train_losses = []
         self.episode_val_losses = []
         self.episode_equity_curves = []
-        self.best_equity_curve = None
+        self.best_equity_curve = []
         self.best_episode = 0
         
         # Reset initial equity
@@ -226,18 +265,32 @@ class TrainingEnvironment:
                     
                     # Only look for new position if we don't have one
                     if current_position is None:
-                        trade_params = self.agent.predict(screenshot_data)
-                        
-                        if trade_params['should_trade']:
-                            action = trade_params['action']  # 0=long, 1=short
-                            stop_loss = trade_params['long_stop_loss'] if action == 0 else trade_params['short_stop_loss']
-                            take_profit = trade_params['long_take_profit'] if action == 0 else trade_params['short_take_profit']
+                        try:
+                            trade_params = self.agent.predict(screenshot_data)
+                            logger.debug(f"Trade params received: {trade_params}")
                             
-                            current_position = Position(action, current_price, stop_loss, take_profit)
-                            metrics.record_action(timestamp, trade_params, current_equity)
-                            
-                            # Add to memory for training
-                            self.memory.append((screenshot_data, action, 0))  # Initial reward is 0
+                            if trade_params.get('should_trade', False):
+                                action = get_safe_value(trade_params, 'action', 0)  # Default to long if action is invalid
+                                
+                                # Get stop loss with defensive programming
+                                if action == 0:
+                                    stop_loss = get_safe_value(trade_params, 'long_stop_loss')
+                                else:
+                                    stop_loss = get_safe_value(trade_params, 'short_stop_loss')
+                                
+                                logger.info(f"Creating position: Action={action}, Stop Loss={stop_loss}%")
+                                
+                                # Create new position with error handling
+                                current_position = Position(action, current_price, stop_loss)
+                                metrics.record_action(timestamp, trade_params, current_equity)
+                                
+                                # Add to memory for training
+                                self.memory.append((screenshot_data, action, 0))  # Initial reward is 0
+                                
+                        except Exception as e:
+                            logger.error(f"Error processing trade: {e}")
+                            logger.error(f"Trade params: {trade_params if 'trade_params' in locals() else 'Not available'}")
+                            current_position = None  # Ensure position is None if creation failed
                     
                     if current_equity <= 0:
                         logger.warning(f"Episode {episode_num + 1} - Training equity reached {current_equity:.2f} at step {step}. Ending episode early.")
@@ -359,15 +412,29 @@ class TrainingEnvironment:
                         
                         # Only look for new position if we don't have one
                         if current_position is None:
-                            trade_params = self.agent.predict(screenshot)
-                            
-                            if trade_params['should_trade']:
-                                action = trade_params['action']
-                                stop_loss = trade_params['long_stop_loss'] if action == 0 else trade_params['short_stop_loss']
-                                take_profit = trade_params['long_take_profit'] if action == 0 else trade_params['short_take_profit']
+                            try:
+                                trade_params = self.agent.predict(screenshot)
+                                logger.debug(f"Trade params received: {trade_params}")
                                 
-                                current_position = Position(action, current_price, stop_loss, take_profit)
-                                metrics.record_action(timestamp, trade_params, current_equity)
+                                if trade_params.get('should_trade', False):
+                                    action = get_safe_value(trade_params, 'action', 0)  # Default to long if action is invalid
+                                    
+                                    # Get stop loss with defensive programming
+                                    if action == 0:
+                                        stop_loss = get_safe_value(trade_params, 'long_stop_loss')
+                                    else:
+                                        stop_loss = get_safe_value(trade_params, 'short_stop_loss')
+                                    
+                                    logger.info(f"Creating position: Action={action}, Stop Loss={stop_loss}%")
+                                    
+                                    # Create new position with error handling
+                                    current_position = Position(action, current_price, stop_loss)
+                                    metrics.record_action(timestamp, trade_params, current_equity)
+                                    
+                            except Exception as e:
+                                logger.error(f"Error processing trade during validation: {e}")
+                                logger.error(f"Trade params: {trade_params if 'trade_params' in locals() else 'Not available'}")
+                                current_position = None  # Ensure position is None if creation failed
                         
                         if current_equity <= 0:
                             logger.warning(f"Validation equity reached {current_equity:.2f}. Ending validation early.")
@@ -444,6 +511,11 @@ class TrainingEnvironment:
         """Plot training and validation losses, and equity curves"""
         with self.profiler.profile('plot_progress'):
             try:
+                # Only plot if we have data
+                if not self.episode_train_losses:
+                    logger.info("No training data available to plot yet")
+                    return
+                
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 15))
                 
                 episodes = range(1, len(self.episode_train_losses) + 1)
@@ -455,20 +527,22 @@ class TrainingEnvironment:
                 ax1.legend()
                 
                 ax2.plot(episodes, self.episode_train_losses, 'b-', label='Training Loss')
-                ax2.plot(episodes, self.episode_val_losses, 'r-', label='Validation Loss')
+                if self.episode_val_losses:  # Only plot validation losses if we have them
+                    ax2.plot(episodes, self.episode_val_losses, 'r-', label='Validation Loss')
                 ax2.set_title('Training vs Validation Loss')
                 ax2.set_xlabel('Episode')
                 ax2.set_ylabel('Loss')
                 ax2.grid(True)
                 ax2.legend()
                 
-                steps = range(len(self.best_equity_curve))
-                ax3.plot(steps, self.best_equity_curve, 'g-', label=f'Best Model (Episode {self.best_episode + 1})')
-                ax3.set_title('Equity Curve of Best Model')
-                ax3.set_xlabel('Step')
-                ax3.set_ylabel('Equity')
-                ax3.grid(True)
-                ax3.legend()
+                if self.best_equity_curve:  # Only plot equity curve if we have it
+                    steps = range(len(self.best_equity_curve))
+                    ax3.plot(steps, self.best_equity_curve, 'g-', label=f'Best Model (Episode {self.best_episode + 1})')
+                    ax3.set_title('Equity Curve of Best Model')
+                    ax3.set_xlabel('Step')
+                    ax3.set_ylabel('Equity')
+                    ax3.grid(True)
+                    ax3.legend()
                 
                 plt.tight_layout()
                 plot_path = os.path.join(self.log_dir, 'training_progress.png')

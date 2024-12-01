@@ -225,8 +225,8 @@ class TradingAgent:
                 should_take_position = position_confidence >= self.confidence_threshold
                 
                 # Ensure minimum stop-loss and take-profit values
-                min_sl = 0.01  # 1% minimum stop-loss
-                min_tp = 0.02  # 2% minimum take-profit
+                min_sl = 0.001  # 1% minimum stop-loss
+                min_tp = 0.002  # 2% minimum take-profit
                 
                 trade_params = {
                     'should_trade': should_take_position,
