@@ -21,14 +21,14 @@ def plot_candlesticks(df, num_entries=50):
                 df = df.set_index('timestamp')
             df.index = pd.to_datetime(df.index, format='mixed')
 
-        # Get last n entries
-        df_last_n = df.tail(num_entries)
+        # Get last n entries and create a proper copy
+        df_last_n = df.tail(num_entries).copy()
 
         # Calculate EMAs
-        df_last_n['EMA20'] = df_last_n['close'].ewm(span=20, adjust=False).mean()
-        df_last_n['EMA50'] = df_last_n['close'].ewm(span=50, adjust=False).mean()
-        df_last_n['EMA100'] = df_last_n['close'].ewm(span=100, adjust=False).mean()
-        df_last_n['EMA200'] = df_last_n['close'].ewm(span=200, adjust=False).mean()
+        df_last_n.loc[:, 'EMA20'] = df_last_n['close'].ewm(span=20, adjust=False).mean()
+        df_last_n.loc[:, 'EMA50'] = df_last_n['close'].ewm(span=50, adjust=False).mean()
+        df_last_n.loc[:, 'EMA100'] = df_last_n['close'].ewm(span=100, adjust=False).mean()
+        df_last_n.loc[:, 'EMA200'] = df_last_n['close'].ewm(span=200, adjust=False).mean()
 
         # Define style
         style = mpf.make_mpf_style(
