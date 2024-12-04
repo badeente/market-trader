@@ -13,6 +13,7 @@ from early_stopping import EarlyStopping
 from screenshot_manager import ScreenshotManager
 from performance_profiler import PerformanceProfiler
 from backtester.data_provider import DataProvider
+from contextlib import contextmanager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,11 @@ VALIDATION_EARLY_STOP_THRESHOLD = 1.5  # Stop validation if loss is 1.5x worse t
 MIN_STOP_LOSS_PCT = 0.001  # Minimum 0.1% stop loss
 DEFAULT_STOP_LOSS_PCT = 0.02  # Default 2% stop loss if none provided
 
+@contextmanager
+def dummy_profiler(*args, **kwargs):
+    """Dummy context manager when profiling is disabled"""
+    yield
+
 def get_safe_value(params, key, default=DEFAULT_STOP_LOSS_PCT):
     """Safely get a value from trade parameters"""
     try:
@@ -40,7 +46,7 @@ def get_safe_value(params, key, default=DEFAULT_STOP_LOSS_PCT):
         return default
 
 class Position:
-    def __init__(self, position_type, entry_price, stop_loss_pct, take_profit_pct=None):
+    def __init__(self, position_type, entry_price, stop_loss_pct, max_risk_per_trade=DEFAULT_RISK_PER_TRADE):
         self.type = position_type  # 0=long, 1=short
         self.entry_price = entry_price
         
@@ -54,6 +60,11 @@ class Position:
             
             # Ensure minimum stop loss percentage
             stop_loss_pct = max(stop_loss_pct, MIN_STOP_LOSS_PCT)
+            
+            # Enforce maximum risk per trade
+            if stop_loss_pct > max_risk_per_trade:
+                logger.warning(f"Stop loss {stop_loss_pct*100:.2f}% exceeds maximum risk {max_risk_per_trade*100:.2f}%. Using maximum allowed risk.")
+                stop_loss_pct = max_risk_per_trade
             
             # If stop loss is somehow invalid, use default
             if stop_loss_pct <= 0 or np.isnan(stop_loss_pct):
@@ -99,15 +110,20 @@ class TrainingEnvironment:
     def __init__(self, train_data_path, val_data_path, model_save_dir, batch_size=16, memory_size=10000,
                  risk_per_trade=DEFAULT_RISK_PER_TRADE, screenshot_cache_size=1000,
                  validation_frequency=VALIDATION_FREQUENCY, validation_subset_size=VALIDATION_SUBSET_SIZE,
-                 validation_early_stop_threshold=VALIDATION_EARLY_STOP_THRESHOLD):
+                 validation_early_stop_threshold=VALIDATION_EARLY_STOP_THRESHOLD, use_profiler=True):
         """Initialize the training environment with configurable parameters"""
         logger.info(f"Initializing training environment...")
         
-        # Initialize performance profiler with log directory
+        # Initialize performance profiler with log directory if enabled
         self.log_dir = os.path.join(model_save_dir, 'logs')
         os.makedirs(self.log_dir, exist_ok=True)
-        self.profiler = PerformanceProfiler(log_dir=self.log_dir)
-        self.profiler.start_cpu_monitoring()
+        self.use_profiler = use_profiler
+        if use_profiler:
+            self.profiler = PerformanceProfiler(log_dir=self.log_dir)
+            self.profile = self.profiler.profile
+        else:
+            self.profiler = None
+            self.profile = dummy_profiler
         
         logger.info(f"Training data path: {train_data_path}")
         logger.info(f"Validation data path: {val_data_path}")
@@ -116,7 +132,9 @@ class TrainingEnvironment:
         logger.info(f"Screenshot cache size: {screenshot_cache_size}")
         logger.info(f"Validation frequency: Every {validation_frequency} batches")
         logger.info(f"Validation subset size: {validation_subset_size*100}%")
+        logger.info(f"Performance profiling: {'Enabled' if use_profiler else 'Disabled'}")
         
+        self.risk_per_trade = risk_per_trade
         self.agent = TradingAgent(max_risk_per_trade=risk_per_trade)
         self.train_data_provider = DataProvider(train_data_path)
         self.val_data_provider = DataProvider(val_data_path)
@@ -176,7 +194,7 @@ class TrainingEnvironment:
     
     def get_latest_screenshots(self, data_provider):
         """Get the latest market data as a PNG screenshot"""
-        with self.profiler.profile('get_screenshots'):
+        with self.profile('get_screenshots'):
             try:
                 window = data_provider.get_next_window()
                 if window is None:
@@ -204,7 +222,7 @@ class TrainingEnvironment:
     
     def accumulate_batch(self, screenshot, action):
         """Accumulate samples until we have a full batch"""
-        with self.profiler.profile('batch_accumulation'):
+        with self.profile('batch_accumulation'):
             self.current_batch_screenshots.append(screenshot)
             self.current_batch_actions.append(action)
             
@@ -223,7 +241,7 @@ class TrainingEnvironment:
     
     def train_episode(self, episode_num, num_steps=100):
         """Train for one episode with validation"""
-        with self.profiler.profile('train_episode'):
+        with self.profile('train_episode'):
             episode_rewards = []
             train_losses = []
             val_losses = []
@@ -246,6 +264,9 @@ class TrainingEnvironment:
                     if current_position is not None:
                         should_close, reason = current_position.check_exit_conditions(current_price)
                         if should_close:
+                            # Store position type before clearing position
+                            position_type = current_position.type
+                            
                             # Calculate reward based on exit reason
                             if reason == 'stop_loss':
                                 reward = -current_position.stop_loss_price / current_position.entry_price + 1
@@ -256,12 +277,13 @@ class TrainingEnvironment:
                                 reward = -reward
                             
                             current_equity *= (1 + reward)
-                            metrics.record_action(timestamp, {'action': None, 'exit_reason': reason}, current_equity)
+                            # Pass proper trade_params with exit reason
+                            metrics.record_action(timestamp, {'exit_reason': reason}, current_equity)
                             current_position = None
                             episode_rewards.append(reward)
                             
-                            # Add to memory for training
-                            self.memory.append((screenshot_data, current_position.type if current_position else None, reward))
+                            # Add to memory for training using stored position_type
+                            self.memory.append((screenshot_data, position_type, reward))
                     
                     # Only look for new position if we don't have one
                     if current_position is None:
@@ -280,8 +302,8 @@ class TrainingEnvironment:
                                 
                                 logger.info(f"Creating position: Action={action}, Stop Loss={stop_loss}%")
                                 
-                                # Create new position with error handling
-                                current_position = Position(action, current_price, stop_loss)
+                                # Create new position with error handling and pass max risk per trade
+                                current_position = Position(action, current_price, stop_loss, max_risk_per_trade=self.risk_per_trade)
                                 metrics.record_action(timestamp, trade_params, current_equity)
                                 
                                 # Add to memory for training
@@ -361,7 +383,8 @@ class TrainingEnvironment:
                     logger.info(f"Episode {episode_num + 1} ended with equity: {current_equity:.2f}")
                     
                     # Save performance statistics at the end of each episode
-                    self.profiler.save_statistics(f'performance_stats_episode_{episode_num + 1}.txt')
+                    if self.use_profiler:
+                        self.profiler.save_statistics(f'performance_stats_episode_{episode_num + 1}.txt')
                     
                     return avg_reward, avg_train_loss, avg_val_loss, current_equity
                 
@@ -372,12 +395,13 @@ class TrainingEnvironment:
                 return 0.0, 0.0, 0.0, current_equity
             finally:
                 # Save final performance statistics for the episode
-                self.profiler.save_statistics(f'performance_stats_episode_{episode_num + 1}.txt')
-                self.profiler.reset()  # Reset statistics for next episode
+                if self.use_profiler:
+                    self.profiler.save_statistics(f'performance_stats_episode_{episode_num + 1}.txt')
+                    self.profiler.reset()  # Reset statistics for next episode
     
     def validate(self):
         """Validate the model using the validation data provider"""
-        with self.profiler.profile('validation'):
+        with self.profile('validation'):
             val_losses = []
             metrics = TradeMetrics()
             self.agent.model.eval()
@@ -398,6 +422,9 @@ class TrainingEnvironment:
                         if current_position is not None:
                             should_close, reason = current_position.check_exit_conditions(current_price)
                             if should_close:
+                                # Store position type before clearing position
+                                position_type = current_position.type
+                                
                                 if reason == 'stop_loss':
                                     reward = -current_position.stop_loss_price / current_position.entry_price + 1
                                 else:  # take_profit
@@ -407,7 +434,8 @@ class TrainingEnvironment:
                                     reward = -reward
                                 
                                 current_equity *= (1 + reward)
-                                metrics.record_action(timestamp, {'action': None, 'exit_reason': reason}, current_equity)
+                                # Pass proper trade_params with exit reason
+                                metrics.record_action(timestamp, {'exit_reason': reason}, current_equity)
                                 current_position = None
                         
                         # Only look for new position if we don't have one
@@ -427,8 +455,8 @@ class TrainingEnvironment:
                                     
                                     logger.info(f"Creating position: Action={action}, Stop Loss={stop_loss}%")
                                     
-                                    # Create new position with error handling
-                                    current_position = Position(action, current_price, stop_loss)
+                                    # Create new position with error handling and pass max risk per trade
+                                    current_position = Position(action, current_price, stop_loss, max_risk_per_trade=self.risk_per_trade)
                                     metrics.record_action(timestamp, trade_params, current_equity)
                                     
                             except Exception as e:
@@ -466,7 +494,7 @@ class TrainingEnvironment:
     
     def save_best_model(self):
         """Save best model and metrics"""
-        with self.profiler.profile('save_model'):
+        with self.profile('save_model'):
             try:
                 if self.best_model_state is not None:
                     # Save model
@@ -509,7 +537,7 @@ class TrainingEnvironment:
     
     def plot_training_progress(self):
         """Plot training and validation losses, and equity curves"""
-        with self.profiler.profile('plot_progress'):
+        with self.profile('plot_progress'):
             try:
                 # Only plot if we have data
                 if not self.episode_train_losses:
@@ -556,4 +584,5 @@ class TrainingEnvironment:
     
     def __del__(self):
         """Cleanup when the environment is destroyed"""
-        self.profiler.stop_cpu_monitoring()
+        if self.use_profiler and self.profiler:
+            self.profiler.stop_cpu_monitoring()

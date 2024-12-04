@@ -13,15 +13,26 @@ class TradeMetrics:
         
     def record_action(self, timestamp, trade_params, equity):
         """Record trading action and update metrics with stop-loss and take-profit"""
-        action = trade_params['action']
+        # Handle stop-loss/take-profit events
+        if trade_params is None or 'exit_reason' in trade_params:
+            if self.current_trade is not None:
+                exit_reason = trade_params.get('exit_reason', 'manual') if trade_params else 'manual'
+                self._close_trade(timestamp, equity, exit_reason)
+            return
+            
+        # Handle regular trading actions
+        action = trade_params.get('action')
+        if action is None:
+            return
+            
         if action != 0:  # Opening or switching position
             if self.current_trade is None:  # Opening new trade
                 self.current_trade = {
                     'entry_time': timestamp,
                     'entry_equity': equity,
                     'position': 'long' if action == 1 else 'short',
-                    'stop_loss': trade_params['long_stop_loss'] if action == 1 else trade_params['short_stop_loss'],
-                    'take_profit': trade_params['long_take_profit'] if action == 1 else trade_params['short_take_profit']
+                    'stop_loss': trade_params.get('long_stop_loss', 0) if action == 1 else trade_params.get('short_stop_loss', 0),
+                    'take_profit': trade_params.get('long_take_profit', 0) if action == 1 else trade_params.get('short_take_profit', 0)
                 }
             else:  # Switching position
                 self._close_trade(timestamp, equity)
@@ -29,13 +40,13 @@ class TradeMetrics:
                     'entry_time': timestamp,
                     'entry_equity': equity,
                     'position': 'long' if action == 1 else 'short',
-                    'stop_loss': trade_params['long_stop_loss'] if action == 1 else trade_params['short_stop_loss'],
-                    'take_profit': trade_params['long_take_profit'] if action == 1 else trade_params['short_take_profit']
+                    'stop_loss': trade_params.get('long_stop_loss', 0) if action == 1 else trade_params.get('short_stop_loss', 0),
+                    'take_profit': trade_params.get('long_take_profit', 0) if action == 1 else trade_params.get('short_take_profit', 0)
                 }
         elif action == 0 and self.current_trade is not None:  # Closing position
             self._close_trade(timestamp, equity)
     
-    def _close_trade(self, exit_time, exit_equity):
+    def _close_trade(self, exit_time, exit_equity, forced_exit_reason=None):
         """Close current trade and calculate metrics"""
         if self.current_trade:
             self.current_trade['exit_time'] = exit_time
@@ -50,11 +61,15 @@ class TradeMetrics:
                 logger.warning(f"Invalid entry equity value: {entry_equity}. Setting return to 0.")
                 self.current_trade['return'] = 0.0
             
-            # Record if trade was closed due to stop-loss or take-profit
-            if self.current_trade['return'] < 0:
-                self.current_trade['exit_reason'] = 'stop_loss' if abs(self.current_trade['return']) >= self.current_trade['stop_loss']/100 else 'manual'
+            # Use forced exit reason if provided (for stop-loss/take-profit events)
+            if forced_exit_reason:
+                self.current_trade['exit_reason'] = forced_exit_reason
             else:
-                self.current_trade['exit_reason'] = 'take_profit' if self.current_trade['return'] >= self.current_trade['take_profit']/100 else 'manual'
+                # Record if trade was closed due to stop-loss or take-profit
+                if self.current_trade['return'] < 0:
+                    self.current_trade['exit_reason'] = 'stop_loss' if abs(self.current_trade['return']) >= self.current_trade['stop_loss']/100 else 'manual'
+                else:
+                    self.current_trade['exit_reason'] = 'take_profit' if self.current_trade['return'] >= self.current_trade['take_profit']/100 else 'manual'
             
             self.trades.append(self.current_trade)
             self.returns.append(self.current_trade['return'])
