@@ -33,7 +33,7 @@ def main():
         )
         
         # Run just one episode to verify screenshot counting
-        num_episodes = 2
+        num_episodes = 4
         for episode in range(num_episodes):
             logger.info(f"Starting episode {episode + 1}/{num_episodes}")
             

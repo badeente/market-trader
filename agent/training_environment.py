@@ -63,12 +63,12 @@ class Position:
             
             # Enforce maximum risk per trade
             if stop_loss_pct > max_risk_per_trade:
-                logger.warning(f"Stop loss {stop_loss_pct*100:.2f}% exceeds maximum risk {max_risk_per_trade*100:.2f}%. Using maximum allowed risk.")
+                #logger.warning(f"Stop loss {stop_loss_pct*100:.2f}% exceeds maximum risk {max_risk_per_trade*100:.2f}%. Using maximum allowed risk.")
                 stop_loss_pct = max_risk_per_trade
             
             # If stop loss is somehow invalid, use default
             if stop_loss_pct <= 0 or np.isnan(stop_loss_pct):
-                logger.warning(f"Invalid stop loss {stop_loss_pct}, using default {DEFAULT_STOP_LOSS_PCT}")
+                #logger.warning(f"Invalid stop loss {stop_loss_pct}, using default {DEFAULT_STOP_LOSS_PCT}")
                 stop_loss_pct = DEFAULT_STOP_LOSS_PCT
             
             # Set stop loss based on input percentage
@@ -110,7 +110,7 @@ class TrainingEnvironment:
     def __init__(self, train_data_path, val_data_path, model_save_dir, batch_size=16, memory_size=10000,
                  risk_per_trade=DEFAULT_RISK_PER_TRADE, screenshot_cache_size=1000,
                  validation_frequency=VALIDATION_FREQUENCY, validation_subset_size=VALIDATION_SUBSET_SIZE,
-                 validation_early_stop_threshold=VALIDATION_EARLY_STOP_THRESHOLD, use_profiler=True):
+                 validation_early_stop_threshold=VALIDATION_EARLY_STOP_THRESHOLD, use_profiler=False):
         """Initialize the training environment with configurable parameters"""
         logger.info(f"Initializing training environment...")
         
@@ -187,9 +187,16 @@ class TrainingEnvironment:
         logger.info("Training environment initialized successfully")
     
     def reset_equity(self):
-        """Reset equity to initial value for training only"""
-        self.train_data_provider.equity = INITIAL_EQUITY
-        logger.info(f"Reset training equity to {INITIAL_EQUITY}")
+        """Reset equity to initial value for training only and select new random week"""
+        # Reset to new random week
+        initial_window = self.train_data_provider.reset_to_random_week()
+        if initial_window is None:
+            logger.error("Failed to reset to random week")
+            return INITIAL_EQUITY
+            
+        state = self.train_data_provider.get_state()
+        logger.info(f"Reset training equity to {INITIAL_EQUITY} and selected new week "
+                   f"(indices {state['week_start']} to {state['week_end']})")
         return INITIAL_EQUITY
     
     def get_latest_screenshots(self, data_provider):
@@ -246,18 +253,21 @@ class TrainingEnvironment:
             train_losses = []
             val_losses = []
             equity_curve = []
-            current_equity = self.reset_equity()
+            current_equity = self.reset_equity()  # This now also selects a new random week
             metrics = TradeMetrics()
             current_position = None  # Track current position
             
-            logger.info(f"\nEpisode {episode_num + 1} - Starting training with {num_steps} steps")
+            # Get initial state to log week information
+            state = self.train_data_provider.get_state()
+            logger.info(f"\nEpisode {episode_num + 1} - Starting training with week "
+                       f"from index {state['week_start']} to {state['week_end']}")
             logger.info(f"Episode {episode_num + 1} - Starting equity: {current_equity}")
             
             try:
                 for step in range(num_steps):
                     screenshot_data, timestamp, current_price = self.get_latest_screenshots(self.train_data_provider)
                     if screenshot_data is None or current_price is None:
-                        logger.info(f"Episode {episode_num + 1} - No more training data available")
+                        logger.info(f"Episode {episode_num + 1} - End of week reached at step {step}")
                         break
                     
                     # Check if current position should be closed
@@ -405,8 +415,19 @@ class TrainingEnvironment:
             val_losses = []
             metrics = TradeMetrics()
             self.agent.model.eval()
+            
+            # Reset validation provider to new random week
+            initial_window = self.val_data_provider.reset_to_random_week()
+            if initial_window is None:
+                logger.error("Failed to reset validation to random week")
+                return None, None
+                
             current_equity = self.val_data_provider.equity
             current_position = None
+            
+            # Get initial state to log week information
+            state = self.val_data_provider.get_state()
+            logger.info(f"Starting validation with week from index {state['week_start']} to {state['week_end']}")
             
             try:
                 with torch.no_grad():
@@ -416,6 +437,7 @@ class TrainingEnvironment:
                     while validation_steps < max_validation_steps:
                         screenshot, timestamp, current_price = self.get_latest_screenshots(self.val_data_provider)
                         if screenshot is None or current_price is None:
+                            logger.info("End of validation week reached")
                             break
                         
                         # Check if current position should be closed
