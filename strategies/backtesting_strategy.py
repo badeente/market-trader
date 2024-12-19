@@ -2,7 +2,7 @@ from backtesting import Backtest, Strategy as BacktestStrategy
 import pandas as pd
 from typing import List
 from strategies.strategy import Strategy, DataFrameRow, TradingAction
-import pandas as pd
+import plotly.graph_objects as go
 
 class BacktestingStrategy(BacktestStrategy):
     # Define strategy as a class variable parameter
@@ -89,4 +89,18 @@ def run_backtest(csv_path: str, strategy: Strategy, cash: float = 10000, commiss
     
     # Pass strategy instance as a parameter
     stats = bt.run(strategy=strategy)
+    
+    # Generate plot
+    fig = go.Figure(data=[go.Candlestick(x=data.index,
+                                         open=data['Open'],
+                                         high=data['High'],
+                                         low=data['Low'],
+                                         close=data['Close'])])
+
+    # Save plot as HTML
+    fig.write_html("backtest_results.html")
+    
+    # Call plot function without any custom formatting
+    bt.plot()
+    
     return stats, bt
