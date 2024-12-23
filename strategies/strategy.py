@@ -21,7 +21,7 @@ class DataFrameRow:
     high: float
     low: float
     close: float
-    volume: float
+    volume: int  # Changed to int since volume should be whole numbers
 
 class Strategy(Protocol):
     def predict(self, row: DataFrameRow) -> PredictionResult:

@@ -50,55 +50,120 @@ def save_backtest_results(stats, bt, strategy_name: str, chunk_number: int):
     return run_dir
 
 def main():
-    # Initialize the strategy
-    strategy = TwoLeggedPullbackStrategy()
+    print("Starting backtest process...")
     
-    # Get all split CSV files
-    split_csv_files = sorted(glob.glob('data/split_dev/dev_chunk_*.csv'))
+    try:
+        # Initialize the strategy
+        print("Initializing TwoLeggedPullbackStrategy...")
+        strategy = TwoLeggedPullbackStrategy()
+        
+        # Get all split CSV files - fixed pattern to use single underscore
+        print("Looking for CSV files in data/split_clean15/...")
+        split_csv_files = sorted(glob.glob('data/split_clean15/week_*.csv'))
+        print(f"Found {len(split_csv_files)} CSV files")
+        
+        if not split_csv_files:
+            print("ERROR: No CSV files found matching the pattern 'data/split_clean15/week_*.csv'")
+            print("Current working directory:", os.getcwd())
+            try:
+                print("Files in data/split_clean15/:", os.listdir('data/split_clean15'))
+            except Exception as e:
+                print(f"Error listing directory: {str(e)}")
+            return
+        
+        # Print first few files found to verify pattern
+        print("\nFirst few files found:")
+        for file in split_csv_files[:5]:
+            print(f"- {file}")
+        
+        all_stats = []
+        all_bt = []
+        
+        for chunk_number, csv_path in enumerate(split_csv_files, 1):
+            print(f"\nProcessing chunk {chunk_number}/{len(split_csv_files)}: {csv_path}")
+            try:
+                # Verify file exists and is readable
+                if not os.path.isfile(csv_path):
+                    print(f"ERROR: File does not exist: {csv_path}")
+                    continue
+                    
+                # Check file size
+                file_size = os.path.getsize(csv_path)
+                if file_size == 0:
+                    print(f"ERROR: File is empty: {csv_path}")
+                    continue
+                    
+                print(f"File size: {file_size} bytes")
+                
+                # Run backtest for each chunk
+                print("Running backtest...")
+                stats, bt = run_backtest(
+                    csv_path=csv_path,
+                    strategy=strategy,
+                    cash=10000,  # Start with $10,000
+                    commission=0.002  # 0.2% commission per trade
+                )
+                print("Backtest completed successfully")
+                
+                # Save results for each chunk
+                print("Saving results...")
+                results_dir = save_backtest_results(stats, bt, "TwoLeggedPullback", chunk_number)
+                print(f"Results saved to: {results_dir}")
+                
+                # Collect stats and bt for aggregation
+                all_stats.append(stats)
+                all_bt.append(bt)
+                
+            except Exception as e:
+                print(f"ERROR processing chunk {chunk_number}:")
+                print(f"Exception: {str(e)}")
+                import traceback
+                print("Traceback:")
+                print(traceback.format_exc())
+                continue
+        
+        print(f"\nProcessed {len(all_stats)} chunks successfully out of {len(split_csv_files)} total chunks")
+        
+        # Aggregate results
+        if all_stats:
+            print("\nAggregating results...")
+            try:
+                aggregated_stats = {
+                    'Return [%]': sum(stat['Return [%]'] for stat in all_stats),
+                    'Buy & Hold Return [%]': sum(stat['Buy & Hold Return [%]'] for stat in all_stats),
+                    'Max. Drawdown [%]': max(stat['Max. Drawdown [%]'] for stat in all_stats),
+                    '# Trades': sum(stat['# Trades'] for stat in all_stats),
+                    'Win Rate [%]': sum(stat['Win Rate [%]'] for stat in all_stats) / len(all_stats),
+                    'Profit Factor': sum(stat['Profit Factor'] for stat in all_stats) / len(all_stats),
+                    'Sharpe Ratio': sum(stat['Sharpe Ratio'] for stat in all_stats) / len(all_stats)
+                }
+                
+                # Save aggregated results
+                print("Saving aggregated results...")
+                aggregated_results_dir = save_backtest_results(aggregated_stats, None, "TwoLeggedPullback_Aggregated", "all")
+                print(f"Aggregated results saved to: {aggregated_results_dir}")
+                
+                # Print aggregated results
+                print("\nAggregated Key Metrics:")
+                print(f"Return: {aggregated_stats['Return [%]']:.2f}%")
+                print(f"# Trades: {aggregated_stats['# Trades']}")
+                print(f"Win Rate: {aggregated_stats['Win Rate [%]']:.2f}%")
+                print(f"Max. Drawdown: {aggregated_stats['Max. Drawdown [%]']:.2f}%")
+            except Exception as e:
+                print("ERROR during aggregation:")
+                print(f"Exception: {str(e)}")
+                import traceback
+                print("Traceback:")
+                print(traceback.format_exc())
+        else:
+            print("\nNo results to aggregate - all chunks failed")
     
-    all_stats = []
-    all_bt = []
-    
-    for chunk_number, csv_path in enumerate(split_csv_files, 1):
-        # Run backtest for each chunk
-        stats, bt = run_backtest(
-            csv_path=csv_path,
-            strategy=strategy,
-            cash=10000,  # Start with $10,000
-            commission=0.002  # 0.2% commission per trade
-        )
-        
-        # Save results for each chunk
-        results_dir = save_backtest_results(stats, bt, "TwoLeggedPullback", chunk_number)
-        
-        # Print path to results for each chunk
-        print(f"\nBacktest results for chunk {chunk_number} saved to: {results_dir}")
-        
-        # Collect stats and bt for aggregation
-        all_stats.append(stats)
-        all_bt.append(bt)
-    
-    # Aggregate results
-    if all_stats:
-        aggregated_stats = {
-            'Return [%]': sum(stat['Return [%]'] for stat in all_stats),
-            'Buy & Hold Return [%]': sum(stat['Buy & Hold Return [%]'] for stat in all_stats),
-            'Max. Drawdown [%]': max(stat['Max. Drawdown [%]'] for stat in all_stats),
-            '# Trades': sum(stat['# Trades'] for stat in all_stats),
-            'Win Rate [%]': sum(stat['Win Rate [%]'] for stat in all_stats) / len(all_stats),
-            'Profit Factor': sum(stat['Profit Factor'] for stat in all_stats) / len(all_stats),
-            'Sharpe Ratio': sum(stat['Sharpe Ratio'] for stat in all_stats) / len(all_stats)
-        }
-        
-        # Save aggregated results
-        aggregated_results_dir = save_backtest_results(aggregated_stats, None, "TwoLeggedPullback_Aggregated", "all")
-        
-        # Print aggregated results
-        print("\nAggregated Key Metrics:")
-        print(f"Return: {aggregated_stats['Return [%]']:.2f}%")
-        print(f"# Trades: {aggregated_stats['# Trades']}")
-        print(f"Win Rate: {aggregated_stats['Win Rate [%]']:.2f}%")
-        print(f"Max. Drawdown: {aggregated_stats['Max. Drawdown [%]']:.2f}%")
+    except Exception as e:
+        print("ERROR in main:")
+        print(f"Exception: {str(e)}")
+        import traceback
+        print("Traceback:")
+        print(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
