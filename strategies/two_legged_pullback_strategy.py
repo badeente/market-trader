@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple
 from strategies.strategy import Strategy, DataFrameRow, PredictionResult, TradingAction
+from strategies.patterns import trend_classification
 
 @dataclass
 class PullbackState:
@@ -13,6 +14,7 @@ class PullbackState:
 class TwoLeggedPullbackStrategy(Strategy):
     def __init__(self):
         self.recent_candles: List[DataFrameRow] = []
+        self.candle_data: List[DataFrameRow] = []
         self.min_candles_needed = 4
         self.current_state = PullbackState()
         
@@ -33,6 +35,7 @@ class TwoLeggedPullbackStrategy(Strategy):
         
         # Add the new candle to our history
         self.recent_candles.append(candle)
+        self.candle_data.append(candle)
 
         # Keep only the necessary amount of candles
         if len(self.recent_candles) > self.min_candles_needed:
@@ -152,3 +155,10 @@ class TwoLeggedPullbackStrategy(Strategy):
             stop_loss=0,
             take_profit=0
         )
+    
+    def _determine_trend(self):
+        ta = trend_classification.TrendAnalyzer()
+        result = ta.linear_regression_slope(self.candle_data[-100:])
+        print(result)
+        return result
+        

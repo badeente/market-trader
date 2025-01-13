@@ -42,14 +42,12 @@ class TrendAnalyzer:
         :param tolerance: Flat slope tolerance for a 'Ranging' trend.
         :return: The trend ('Uptrend', 'Downtrend', 'Ranging').
         """
-        ema = self.calculate_ema(ema_window)
-        ema_slope = ema.diff().mean()  # Average EMA slope
         lr_slope = self.linear_regression_slope()
 
         # Combine EMA slope and Linear Regression slope to classify trend
-        if ema_slope > tolerance and lr_slope > 0:
+        if lr_slope > 0:
             return "Uptrend"
-        elif ema_slope < -tolerance and lr_slope < 0:
+        elif lr_slope < 0:
             return "Downtrend"
         else:
             return "Ranging"

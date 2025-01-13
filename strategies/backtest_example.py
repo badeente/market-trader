@@ -3,6 +3,7 @@ from datetime import datetime
 from strategies.backtesting_strategy import run_backtest
 from strategies.two_legged_pullback_strategy import TwoLeggedPullbackStrategy
 from backtesting import Backtest
+from backtester import plot_candlesticks
 import pandas as pd
 import glob
 

@@ -64,3 +64,4 @@ class CsvLoaderCandlestickChart:
         if self.df is None:
             raise ValueError("No data loaded. Call load_csv() first.")
         return self.df
+    
