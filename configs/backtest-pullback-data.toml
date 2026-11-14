@@ -1,0 +1,14 @@
+version = 1
+
+[source]
+path = "../tests/fixtures/pullback_candles.csv"
+name = "pullback-candles"
+description = "Synthetic four-candle pullback with next-open entry and target exit"
+
+[dataset]
+instrument = "TEST"
+interval_seconds = 60
+start_time = 2026-01-01T00:00:00Z
+end_time = 2026-01-01T00:06:00Z
+calendar = "continuous"
+gap_policy = "reject"

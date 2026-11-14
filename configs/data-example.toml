@@ -1,0 +1,14 @@
+version = 1
+
+[source]
+path = "../tests/fixtures/fractional_volume.csv"
+name = "fractional-volume"
+description = "Canonical CSV import of the synthetic fractional-volume fixture"
+
+[dataset]
+instrument = "TEST"
+interval_seconds = 60
+start_time = 2026-01-01T00:00:00Z
+end_time = 2026-01-01T00:01:00Z
+calendar = "continuous"
+gap_policy = "reject"

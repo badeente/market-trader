@@ -1,0 +1,13 @@
+version = 1
+data_config = "backtest-data.toml"
+
+[strategy]
+name = "single_long"
+risk_fraction = 0.01
+stop_distance = 0.02
+
+[execution]
+commission_rate = 0.001
+spread = 0.2
+slippage = 0.1
+liquidate_at_end = true

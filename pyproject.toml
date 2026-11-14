@@ -1,0 +1,21 @@
+[project]
+name = "market-trader"
+version = "0.0.0"
+description = "Test-first contracts for reproducible trading research"
+requires-python = ">=3.14,<3.15"
+dependencies = []
+
+[project.scripts]
+market-trader = "market_trader.cli:main"
+
+[build-system]
+requires = ["uv_build==0.13.6"]
+build-backend = "uv_build"
+
+[dependency-groups]
+test = ["pytest>=9.2,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "--strict-config", "--strict-markers"]
+markers = ["case(id): requirement ID from TEST_CASES.md"]

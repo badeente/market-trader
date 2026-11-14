@@ -1,0 +1,14 @@
+version = 1
+
+[source]
+path = "../tests/fixtures/backtest_candles.csv"
+name = "backtest-candles"
+description = "Synthetic candle sequence for the offline R0 backtest"
+
+[dataset]
+instrument = "TEST"
+interval_seconds = 60
+start_time = 2026-01-01T00:00:00Z
+end_time = 2026-01-01T00:04:00Z
+calendar = "continuous"
+gap_policy = "reject"

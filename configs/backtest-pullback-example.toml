@@ -1,0 +1,13 @@
+version = 1
+data_config = "backtest-pullback-data.toml"
+
+[strategy]
+name = "two_legged_pullback"
+risk_fraction = 0.01
+movement_threshold = 0.003
+bounce_threshold = 0.002
+stop_buffer = 0.002
+reward_multiple = 2
+
+[execution]
+price_tick = 0.25

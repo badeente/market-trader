@@ -3,3 +3,19 @@
 *.pyc
 *.xml
 *.iml
+
+# Local environments and test/build artifacts
+.venv/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Small synthetic CSV fixtures are versioned; market datasets remain ignored.
+!tests/fixtures/*.csv
+
+# Generated normalized datasets and provenance artifacts stay local.
+/datasets/

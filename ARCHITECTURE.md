@@ -1,5 +1,34 @@
 # market-trader architecture
 
+As of 2026-11-11, the legacy architecture below coexists with a separate
+data foundation under `src/market_trader/` and `tests/`. Canonical CSV import,
+validation, strict complete-interval resampling, historical windows and causal
+trailing-mean features are implemented with standard-library dependencies.
+`market_trader.normalization` adds sorting, audited deduplication, explicit
+conflict rejection, calendar-aware gap diagnostics and SHA-256 content IDs.
+Instrument/interval groups remain separate and support exact selection.
+`market_trader.calendars` adds finite explicit UTC sessions with declared coverage;
+closed periods are excluded from missing-candle reports. Full calendar rules are
+part of dataset metadata and identity. `market_trader.coverage.DatasetRequest`
+adds explicit UTC ranges per instrument/interval, leading/trailing gap checks,
+expected candle counts and selectable empty results for completely absent series.
+Requests become part of dataset identity; IDs without requests remain compatible.
+`market_trader.storage` publishes versioned local JSON artifacts containing full
+datasets and provenance. Loading verifies the artifact checksum, normalization
+version, dataset ID and quality audit; source fingerprints can be verified with
+explicit path mappings. `market-trader data import` uses a versioned TOML config
+to publish a verified dataset for one continuous series with source provenance.
+`market-trader data verify` validates and summarizes a saved artifact.
+`market_trader.backtesting.run_backtest` drives the R0 simulation on a normalized
+series with time-gated strategy windows, risk sizing, costs and a single ledger.
+`market-trader backtest` selects `single_long`, `sma_crossover`, or the ported
+`two_legged_pullback` through an internal registry and emits a versioned JSON
+report. Each run creates a fresh strategy instance with a declared lookback.
+Saved dataset artifacts supply the session calendar and verified provenance
+directly to the CLI. [Backtest contract](BACKTEST_CONTRACT.md)
+See [DATA_CONTRACT.md](DATA_CONTRACT.md), [STORAGE_CONTRACT.md](STORAGE_CONTRACT.md), [TESTING.md](TESTING.md),
+and [ROADMAP.md](ROADMAP.md) for the new contracts, actual test status and plan.
+
 ## 1. Purpose and review scope
 
 `market-trader` is a collection of Python trading-research prototypes, primarily
@@ -203,9 +232,36 @@ There is no application database, HTTP API, queue, scheduler, container definiti
 or deployment configuration in this snapshot. The only app UI is the Tkinter
 collection tool; HTML plots are generated artifacts, not a hosted service.
 
-No input CSVs are present in this checkout. The repository ignores `*.csv`,
-`*.html`, and `*.pyc`; dataset provisioning is external. No requirements file,
-`pyproject.toml`, dependency lock, or CI definition is present.
+Historical market CSV datasets are not provisioned in this checkout. Small
+synthetic test CSVs under `tests/fixtures/` are now versioned through an explicit
+ignore exception; other `*.csv`, `*.html`, and `*.pyc` artifacts remain ignored.
+The new test scaffold has `pyproject.toml`, `.python-version` and `uv.lock`, with
+pytest as a test dependency and no external core runtime dependencies. These do
+not install the legacy trading/model dependency groups below. No CI definition
+is present. The five initial data APIs and a separate normalization module are
+implemented and tested. Normalization returns immutable in-memory datasets and
+quality reports; it does not rewrite source files. A separate storage module
+persists them with provenance. Normalization
+requires an explicit continuous profile or finite UTC session schedule and can
+report or reject missing active candles. Sessions have independent interval
+grids; closed/out-of-coverage input candles and partial session intervals are
+rejected. No exchange sessions or holiday rules are inferred. Resampling retains
+its UTC-epoch alignment. Optional requests bound each expected series and reject
+out-of-range/unrequested input rather than filtering it. Closed-only requests
+can be complete with zero rows; strict active gaps raise inspectable errors,
+using no source row when one does not exist. See TESTING.md for coverage and
+remaining work.
+
+The persistence API stores one series per artifact, preserving decimal strings,
+UTC microseconds, calendars, requests, gaps and original batch row numbers.
+`artifacts.py` defines immutable manifests; `_dataset_codec.py` applies a strict
+versioned JSON schema without dynamic class loading. Storage validates before
+writing, stages a same-directory temporary file, then publishes it using a
+no-overwrite hard link. Existing files and raw sources remain intact. Generated
+artifacts under `datasets/` are excluded from Git and Graphify. The API assumes
+a local filesystem with hard-link support; it is not a database or cloud adapter.
+Source labels and parent IDs are caller-supplied provenance, not an automatically
+verified replay of all processing steps. See STORAGE_CONTRACT.md for the format.
 
 Imports indicate these dependency groups (not tested/pinned installation lists):
 

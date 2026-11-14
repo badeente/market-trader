@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Market Trader · Backtest report</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: light-dark(#f4f5f2, #151918);
+      --paper: light-dark(#fff, #1e2422);
+      --ink: light-dark(#1b2824, #ebf1ee);
+      --muted: light-dark(#52635b, #aabdb4);
+      --border: light-dark(#d7e0db, #3c4a43);
+      --ridge: light-dark(#06765e, #63dbaf);
+      --comparison: light-dark(#a44916, #f5aa76);
+      --loss: light-dark(#9c3737, #ff9e9e);
+      font: 100%/1.5 system-ui, sans-serif;
+      background: var(--page);
+      color: var(--ink);
+    }
+    * { box-sizing: border-box; }
+    main { max-width: 1080px; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(1.9rem, 5vw, 3.25rem); letter-spacing: -.04em; line-height: 1.08; }
+    h2 { font-size: 1.3rem; letter-spacing: -.025em; }
+    h3 { font-size: 1rem; }
+    header p, .muted { color: var(--muted); }
+    header p { margin-top: .5rem; }
+    section { margin-top: 1.25rem; }
+    .panel, .run-card { border: 1px solid var(--border); background: var(--paper); border-radius: 1rem; }
+    .panel { padding: clamp(1rem, 3vw, 1.5rem); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 1rem; }
+    .run-card { padding: 1rem 1.25rem; min-width: 0; }
+    .run-card h2 { overflow-wrap: anywhere; }
+    dl { display: flex; flex-wrap: wrap; gap: .65rem 1.5rem; margin: .75rem 0 0; }
+    dt { color: var(--muted); font-size: .82rem; }
+    dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .run-card dd { font-size: 1.12rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: .5rem 1.15rem; margin-top: .75rem; }
+    .legend span::before { content: ""; display: inline-block; width: 1.25rem; margin-right: .4rem; vertical-align: middle; border-top: 3px solid var(--ridge); }
+    .legend span:nth-child(2)::before { border-color: var(--comparison); border-top-style: dashed; }
+    .chart { width: 100%; height: 235px; display: block; }
+    .chart text { fill: var(--muted); font: 12px system-ui, sans-serif; }
+    .chart .gridline { stroke: var(--border); }
+    .chart .zero { stroke: var(--muted); stroke-dasharray: 3 4; }
+    .chart .primary { stroke: var(--ridge); }
+    .chart .secondary { stroke: var(--comparison); stroke-dasharray: 6 4; }
+    .chart .point { fill: var(--ridge); opacity: .7; }
+    .chart .guide { stroke: var(--muted); stroke-dasharray: 5 4; }
+    .chart polyline { fill: none; stroke-width: 2; }
+    .field-row { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem 1rem; margin: .9rem 0; }
+    label { display: grid; gap: .2rem; max-width: 100%; font-size: .88rem; }
+    select { max-width: 100%; font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--border); border-radius: .4rem; padding: .45rem .6rem; }
+    .trade-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 1rem; margin-top: 1rem; }
+    .trade-grid dl { display: grid; grid-template-columns: 1fr 1fr; }
+    .trade-grid dd { overflow-wrap: anywhere; }
+    .inputs { display: grid; gap: .45rem; margin-top: .75rem; }
+    .input-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(50px, .7fr) minmax(60px, 1fr) auto; gap: .5rem; align-items: center; font-size: .82rem; }
+    .input-row span:first-child { overflow-wrap: anywhere; }
+    .input-row span:nth-child(2), .input-row span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    .track { height: .55rem; position: relative; background: linear-gradient(to right, transparent calc(50% - 1px), var(--border) 50%, transparent calc(50% + 1px)); }
+    .track i { position: absolute; top: 0; height: 100%; background: var(--ridge); border-radius: 2px; }
+    .track i.negative { background: var(--loss); }
+    details { margin-top: 1.25rem; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; }
+    @media (max-width: 420px) {
+      .input-row { grid-template-columns: minmax(80px, 1fr) minmax(38px, auto) minmax(28px, .6fr) auto; gap: .3rem; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Backtest report</h1>
+    <p id="period"></p>
+  </header>
+  <section id="runs" class="grid" aria-label="Strategy results"></section>
+  <section class="panel" aria-labelledby="performance">
+    <h2 id="performance">Simulated performance</h2>
+    <p class="muted">Equity includes open positions and modeled costs. Drawdown shows the decline from each strategy’s previous peak.</p>
+    <div id="legend" class="legend"></div>
+    <svg id="equity" class="chart" role="img" aria-label="Change from starting equity over time"></svg>
+    <svg id="drawdown" class="chart" role="img" aria-label="Percentage drawdown from peak over time"></svg>
+    <p id="no-history" class="muted" hidden>No dated account history is available.</p>
+  </section>
+  <section id="forecast" class="panel" hidden>
+    <h2>Forecast accuracy</h2>
+    <p id="forecast-period" class="muted"></p>
+    <p id="forecast-target" class="muted"></p>
+    <dl id="forecast-metrics"></dl>
+    <svg id="scatter" class="chart" role="img" aria-label="Predicted versus actual returns in basis points"></svg>
+    <p id="no-points" class="muted" hidden>Individual predictions require the saved model and training export.</p>
+  </section>
+  <section class="panel">
+    <h2>Inspect a trade</h2>
+    <div class="field-row">
+      <label>Strategy <select id="trade-run"></select></label>
+      <label>Closed trade <select id="trade-choice"></select></label>
+    </div>
+    <div id="trade-detail" aria-live="polite"></div>
+  </section>
+  <details>
+    <summary>Run inputs and provenance</summary>
+    <pre id="metadata"></pre>
+  </details>
+</main>
+<script id="report-data" type="application/json">__REPORT_DATA__</script>
+<script>
+  "use strict";
+
+  const byId = id => document.getElementById(id);
+  const data = JSON.parse(byId("report-data").textContent);
+  const dates = data.times.map(value => value ? Date.parse(value) : null);
+  const dayFormat = new Intl.DateTimeFormat("en-GB", {day: "numeric", month: "short", year: "numeric", timeZone: "UTC"});
+  const tickFormat = new Intl.DateTimeFormat("en-GB", {day: "numeric", month: "short", timeZone: "UTC"});
+  const amount = new Intl.NumberFormat("en", {maximumFractionDigits: 6});
+  const percent = value => (value * 100).toFixed(3) + "%";
+  const bp = value => (value * 10000).toFixed(2) + " bp";
+  const dateLabel = value => value ? value.replace("T", " ").replace(/(?:\+00:00|Z)$/, " UTC") : "—";
+  const day = value => dayFormat.format(new Date(value));
+  const names = {single_long: "Single long", sma_crossover: "SMA crossover", ridge_long: "Ridge", two_legged_pullback: "Two-legged pullback"};
+  const labels = data.runs.map((run, index) => {
+    const name = Object.hasOwn(names, run.name) ? names[run.name] : run.name;
+    return data.runs[1]?.name === data.runs[0].name ? name + " · " + (index + 1) : name;
+  });
+
+  function element(tag, content, className) {
+    const node = document.createElement(tag);
+    if (content !== undefined) node.textContent = content;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function metric(list, label, value) {
+    const group = element("div");
+    group.append(element("dt", label), element("dd", value));
+    list.append(group);
+  }
+
+  byId("period").textContent = dates[0] === null ? "Offline simulation" :
+    day(dates[0]) + " – " + day(dates.at(-1)) + " · UTC";
+  for (const [index, run] of data.runs.entries()) {
+    const card = element("article", undefined, "run-card");
+    const stats = element("dl");
+    metric(stats, "Net return", percent(run.returns.at(-1)));
+    metric(stats, "Equity change", amount.format(run.equity_change));
+    metric(stats, "Max drawdown", percent(run.drawdown.reduce((worst, point) => Math.min(worst, point), 0)));
+    metric(stats, "Closed trades", run.trades.length);
+    const status = [
+      run.rejections ? run.rejections + " rejected" : "",
+      run.position_open ? "Position open" : "",
+      run.order_pending ? "Order pending" : ""
+    ].filter(Boolean);
+    card.append(element("h2", labels[index]), stats);
+    if (status.length) card.append(element("p", status.join(" · "), "muted"));
+    byId("runs").append(card);
+    byId("legend").append(element("span", labels[index]));
+    byId("trade-run").append(new Option(labels[index], index));
+  }
+
+  function mark(svg, tag, attributes, content) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+    if (content !== undefined) node.textContent = content;
+    svg.append(node);
+    return node;
+  }
+
+  function chartFrame(svg, vertical, horizontal) {
+    svg.replaceChildren();
+    const width = svg.clientWidth;
+    if (!width) return null;
+    const left = 64, right = width - 20, top = 32, bottom = 196;
+    mark(svg, "text", {x: 0, y: 18}, vertical);
+    if (horizontal) mark(svg, "text", {x: right, y: 229, "text-anchor": "end"}, horizontal);
+    return {width, left, right, top, bottom};
+  }
+
+  function lineChart(id, seriesKey, label) {
+    const svg = byId(id);
+    const frame = chartFrame(svg, label);
+    if (!frame) return;
+    const {left, right, top, bottom, width} = frame;
+    const bounds = data.runs.reduce((range, run) => run[seriesKey].reduce(
+      ([low, high], value) => [Math.min(low, value), Math.max(high, value)], range), [0, 0]);
+    const [low, high] = bounds[0] === bounds[1] ? [-.001, .001] : bounds;
+    const from = dates[0], span = dates.at(-1) - from || 1;
+    const x = value => left + (value - from) / span * (right - left);
+    const y = value => bottom - (value - low) / (high - low) * (bottom - top);
+    for (let i = 0; i <= 4; i++) {
+      const value = low + (high - low) * i / 4;
+      const at = y(value);
+      mark(svg, "line", {x1: left, x2: right, y1: at, y2: at, class: "gridline"});
+      mark(svg, "text", {x: left - 8, y: at + 4, "text-anchor": "end"}, percent(value));
+    }
+    if (low < 0 && high > 0) mark(svg, "line", {x1: left, x2: right, y1: y(0), y2: y(0), class: "zero"});
+    const intervals = width > 560 ? 4 : 2;
+    for (let i = 0; i <= intervals; i++) {
+      const date = from + (span * i / intervals);
+      mark(svg, "text", {x: x(date), y: bottom + 20, "text-anchor": i === intervals ? "end" : "middle"},
+        tickFormat.format(new Date(date)));
+    }
+    for (const [index, run] of data.runs.entries()) {
+      const points = run[seriesKey].map((value, i) => x(dates[i]) + "," + y(value)).join(" ");
+      mark(svg, "polyline", {points, class: index === 0 ? "primary" : "secondary"});
+    }
+  }
+
+  function forecastChart(points) {
+    const svg = byId("scatter");
+    const frame = chartFrame(svg, "Actual return (bp)", "Predicted return (bp)");
+    if (!frame) return;
+    const {left, right, top, bottom} = frame;
+    const maximum = points.reduce((max, row) => Math.max(max, Math.abs(row.actual), Math.abs(row.predicted)), 0);
+    const step = Math.pow(10, Math.floor(Math.log10(maximum * 10000 || 1)));
+    const bound = Math.ceil(maximum * 10000 / step) * step || 1;
+    const x = value => left + (value / bound + 1) * (right - left) / 2;
+    const y = value => bottom - (value / bound + 1) * (bottom - top) / 2;
+    for (const value of [-bound, -bound / 2, 0, bound / 2, bound]) {
+      mark(svg, "line", {x1: left, x2: right, y1: y(value), y2: y(value), class: value ? "gridline" : "zero"});
+      mark(svg, "text", {x: left - 8, y: y(value) + 4, "text-anchor": "end"}, amount.format(value));
+      mark(svg, "text", {x: x(value), y: bottom + 16, "text-anchor": value === bound ? "end" : "middle"}, amount.format(value));
+    }
+    mark(svg, "line", {x1: left, x2: right, y1: bottom, y2: top, class: "guide"});
+    for (const row of points) {
+      const dot = mark(svg, "circle", {cx: x(row.predicted * 10000), cy: y(row.actual * 10000), r: 3, class: "point"});
+      mark(dot, "title", {}, dateLabel(row.at) + " · Predicted " + bp(row.predicted) + " · Actual " + bp(row.actual));
+    }
+  }
+
+  const forecast = data.forecast;
+  if (forecast) {
+    byId("forecast").hidden = false;
+    const test = forecast.test;
+    byId("forecast-period").textContent = forecast.instrument + " · " + day(test.first_decision_at) + " – " +
+      day(test.last_decision_at) + " · " + test.row_count + " held-out forecasts · 1 bp = 0.01%";
+    byId("forecast-target").textContent = forecast.target === "forward_return_next_open_to_horizon_close" ?
+      "Gross return from the next open to the target candle’s close." : forecast.target;
+    const metrics = byId("forecast-metrics");
+    for (const [label, scores] of [["Ridge", test.ridge], ["Zero return", test.zero_return]]) {
+      metric(metrics, label + " average absolute error", bp(scores.mae));
+      metric(metrics, label + " root mean square error", bp(scores.rmse));
+    }
+    byId("no-points").hidden = forecast.points.length > 0;
+    byId("scatter").style.display = forecast.points.length ? "" : "none";
+  }
+
+  function renderCharts() {
+    if (dates[0] === null || dates.length < 2) {
+      byId("no-history").hidden = false;
+      byId("equity").style.display = "none";
+      byId("drawdown").style.display = "none";
+    } else {
+      lineChart("equity", "returns", "Return from starting equity");
+      lineChart("drawdown", "drawdown", "Drawdown from peak");
+    }
+    if (forecast?.points.length) forecastChart(forecast.points);
+  }
+
+  function fillDetail(label, fill) {
+    const block = element("div");
+    const list = element("dl");
+    block.append(element("h3", label), list);
+    metric(list, "Fill candle", dateLabel(fill.candle_open_time));
+    metric(list, "Fill phase / reason", fill.phase + " / " + fill.reason);
+    metric(list, "Side / quantity", fill.side + " / " + fill.quantity);
+    metric(list, "Fill price", fill.price);
+    metric(list, "Reference price", fill.reference_price);
+    metric(list, "Fee", fill.fee);
+    if (fill.order) metric(list, "Decision time", dateLabel(fill.order.decision_at));
+    if (fill.intrabar_ambiguous) metric(list, "OHLC ambiguity", "Stop took priority");
+    return block;
+  }
+
+  function forecastDetail(prediction) {
+    const block = element("div", undefined, "prediction");
+    const list = element("dl");
+    block.append(element("h3", "Ridge entry signal"), list);
+    metric(list, "Predicted return", bp(prediction.forecast));
+    metric(list, "Entry threshold", bp(prediction.threshold));
+    const inputs = element("div", undefined, "inputs");
+    const extent = Math.max(...prediction.inputs.map(input => Math.abs(input.contribution)), Number.EPSILON);
+    const featureLabels = {intercept: "Model intercept", return_1: "Last candle return",
+      window_return: "Full window return", range_fraction: "Latest high–low range", close_vs_mean: "Close vs. window mean"};
+    for (const input of prediction.inputs) {
+      const row = element("div", undefined, "input-row");
+      const track = element("span", undefined, "track");
+      const bar = element("i", undefined, input.contribution < 0 ? "negative" : "");
+      const size = 50 * Math.abs(input.contribution) / extent;
+      bar.style.width = size + "%";
+      bar.style.left = (input.contribution < 0 ? 50 - size : 50) + "%";
+      track.setAttribute("aria-hidden", "true");
+      track.append(bar);
+      row.append(element("span", featureLabels[input.name] ?? input.name),
+        element("span", input.value === null ? "—" : percent(Number(input.value))),
+        track, element("span", bp(input.contribution)));
+      inputs.append(row);
+    }
+    block.append(element("p", "Input value and contribution to the forecast", "muted"), inputs);
+    return block;
+  }
+
+  const runPicker = byId("trade-run");
+  const tradePicker = byId("trade-choice");
+
+  function showTrade() {
+    const run = data.runs[Number(runPicker.value)];
+    const trade = run.trades[Number(tradePicker.value)];
+    const detail = byId("trade-detail");
+    detail.replaceChildren();
+    if (!trade) {
+      detail.append(element("p", "No closed trades in this run.", "muted"));
+      return;
+    }
+    const summary = element("dl");
+    const {entry, exit} = trade;
+    metric(summary, "Net P&L", trade.net_pnl);
+    metric(summary, "P&L at reference prices", trade.reference_pnl);
+    metric(summary, "Fill price impact", trade.fill_price_impact);
+    metric(summary, "Fees", trade.fees);
+    const fills = element("div", undefined, "trade-grid");
+    fills.append(fillDetail("Entry", entry), fillDetail("Exit", exit));
+    detail.append(summary, fills);
+    if (trade.prediction) {
+      fills.append(forecastDetail(trade.prediction));
+    } else if (run.name === "ridge_long") {
+      detail.append(element("p", "Trade forecasts require the saved Ridge model and the backtest dataset.", "muted"));
+    }
+  }
+
+  function chooseRun() {
+    const run = data.runs[Number(runPicker.value)];
+    const options = document.createDocumentFragment();
+    for (const [index, trade] of run.trades.entries()) {
+      options.append(new Option((index + 1) + " · " + dateLabel(trade.entry.candle_open_time) +
+        " · P&L " + trade.net_pnl, index));
+    }
+    tradePicker.replaceChildren(options);
+    tradePicker.disabled = run.trades.length === 0;
+    showTrade();
+  }
+
+  runPicker.disabled = data.runs.length === 1;
+  runPicker.addEventListener("change", chooseRun);
+  tradePicker.addEventListener("change", showTrade);
+  chooseRun();
+  byId("metadata").textContent = JSON.stringify({
+    runs: data.runs.map(run => ({
+      dataset_id: run.dataset_id, dataset_artifact_id: run.dataset_artifact_id,
+      strategy: run.strategy, execution: run.execution, runtime: run.runtime, provenance: run.provenance
+    })),
+    ...(forecast ? {evaluation_report_id: forecast.report_id, evaluation_target: forecast.target} : {})
+  }, null, 2);
+  renderCharts();
+  window.addEventListener("resize", renderCharts);
+</script>
+</body>
+</html>
