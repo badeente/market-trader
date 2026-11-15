@@ -360,3 +360,26 @@ Zwei vollständige echte Läufe aus gleicher Umgebung erzeugten alle 15 Dateien
 bytegleich. Ein separater Wheel-Lauf bestätigte gleiche fachliche Ergebnisse.
 Die JSON-/Quell-/Label-/Trade-Prüfung steht privat unter
 `var/market-trader/acceptance/verify_ap1.py`; dort wird 2025 nicht modelliert.
+
+## AP2: lokale Experimentläufe
+
+Vertrag und exakte TOML-Tabellen: [AP2_EXPERIMENTS.md](AP2_EXPERIMENTS.md).
+Echte Abnahme, Run-IDs und installierter Wheel-Aufruf: [AP2_RESULTS.md](AP2_RESULTS.md).
+
+```sh
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q
+/home/hermes/workspace/.venvs/market-trader-ap2/bin/market-trader experiment run \
+  --config configs/ap2-reference.toml \
+  --registry /home/hermes/workspace/var/market-trader/experiments/my-research
+```
+
+Nach abschließender Typprüfung beschädigter Run-Records: **786 Tests bestanden**.
+Die vier AP2-Testmodule prüfen Konfiguration, Pipeline, Registry, CLI und Replay
+mit synthetischen Kerzen. Zusätzlich wurden echte Referenz, bytegleiches Replay,
+abweichendes Kostenprofil und ein absichtlich fehlschlagender Import ausgeführt.
+Das separat installierte Wheel lieferte gleiche Modell-/Handelswerte. 2025 wurde
+in keinem dieser Läufe modelliert oder bewertet.
+
+Eine JSON-Datei kann syntaktisch gültig sein, ohne ein Run-Objekt zu enthalten:
+Array, null, String und Zahl werden daher explizit mit verständlichem Fehler
+abgewiesen, statt über einen AttributeError einen rohen CLI-Traceback auszugeben.

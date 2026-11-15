@@ -367,8 +367,39 @@ def main(argv: list[str] | None = None) -> int:
     reference.add_argument("--output", type=Path, required=True, help="New private artifact directory")
     reference.set_defaults(action="reference")
 
+    experiment = commands.add_parser("experiment", help="Run, inspect, replay and compare private AP2 experiments")
+    experiment.set_defaults(action="experiment")
+    experiment_commands = experiment.add_subparsers(dest="experiment_action", required=True)
+    for action, help_text in (
+        ("run", "Train, validate, backtest and register a configured experiment"),
+        ("list", "List registered run records"),
+        ("show", "Inspect one run and verify its stored metadata"),
+        ("replay", "Repeat an immutable configuration as a new child run"),
+        ("compare", "Check fair conditions and show configuration differences"),
+    ):
+        command = experiment_commands.add_parser(action, help=help_text)
+        command.add_argument("--registry", type=Path, required=True, help="Private run directory, never a served directory")
+        if action == "run":
+            command.add_argument("--config", type=Path, required=True)
+            command.add_argument("--parent", help="Optional existing parent run ID")
+        elif action in ("show", "replay"):
+            command.add_argument("--run-id", required=True)
+        elif action == "compare":
+            command.add_argument("--left", required=True, help="First completed run ID")
+            command.add_argument("--right", required=True, help="Second completed run ID")
+
     args = parser.parse_args(argv)
     try:
+        if args.action == "experiment":
+            from market_trader.experiments import dispatch_experiment
+
+            try:
+                result = dispatch_experiment(args)
+                encoded = json.dumps(result, sort_keys=True, allow_nan=False)
+            except (OSError, ValueError, ArithmeticError, KeyError, TypeError) as error:
+                raise _CommandError(f"experiment {args.experiment_action}: {error}") from error
+            print(encoded)
+            return 0
         if args.action == "reference":
             from market_trader.reference import run_reference
 

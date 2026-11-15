@@ -11,9 +11,9 @@ Dieser Entwurf priorisiert die vorhandenen ROADMAP.md und MODEL_DEVELOPMENT_ROAD
 - Offline-Datenverarbeitung und Backtester mit gemeinsamen Ausführungs-/Kostenregeln.
 - Chronologische Trainingsdaten, Ridge-Referenz, eingefrorene Modellinferenz und Modell-Backtest.
 - HTML-Berichte; lokale Berichtskonsistenzprüfung und interner Viewer wurden ergänzt.
-- Letzter ausgeführter Gesamttest nach AP1-Implementierung: 653 Tests bestanden. Tatsächliche Referenzläufe und Reproduktion siehe [AP1_RESULTS.md](AP1_RESULTS.md).
+- Letzter ausgeführter Gesamttest nach AP2-Implementierung: 786 Tests bestanden. Referenz- und Experimentabnahme siehe [AP1_RESULTS.md](AP1_RESULTS.md) und [AP2_RESULTS.md](AP2_RESULTS.md).
 - Der Report-Service ist auf Hermes installiert und läuft separat aus einem Wheel; Andreas hat Browser- und VPN-Zugriff bestätigt.
-- Die letzten Report-/Viewer-Änderungen sind noch uncommitted. Vor der nächsten Implementierungsserie einen nachvollziehbaren Stand sichern; Commit/Push nur im freigegebenen Umfang.
+- AP1-/Report-/Viewer-Stand ist unter `655b82c` committed und auf `origin/main` verifiziert. Andreas hat anschließend AP2 zur Umsetzung freigegeben; aktueller Stand in [AP2_EXPERIMENTS.md](AP2_EXPERIMENTS.md).
 
 ## Reihenfolge der Arbeitspakete
 
@@ -25,13 +25,15 @@ Dieser Entwurf priorisiert die vorhandenen ROADMAP.md und MODEL_DEVELOPMENT_ROAD
 
 ### AP1 — Echten Referenzdatensatz und Experimentvertrag herstellen
 
-**Technisch abgeschlossen am 15. November 2026.** Ausgeführte Referenz, Reproduzierbarkeit, unabhängiges Review und interner Bericht: [AP1_RESULTS.md](AP1_RESULTS.md). AP2 ist das nächste vorgeschlagene Paket, aber noch nicht begonnen oder durch AP1 automatisch freigegeben.
+**Technisch abgeschlossen am 15. November 2026.** Ausgeführte Referenz, Reproduzierbarkeit, unabhängiges Review und interner Bericht: [AP1_RESULTS.md](AP1_RESULTS.md). AP2 wurde anschließend ausdrücklich zur Umsetzung freigegeben; siehe [AP2_EXPERIMENTS.md](AP2_EXPERIMENTS.md).
 
 Einen verfügbaren historischen Datensatz importieren; Instrument, Quelle, Zeitzone, Handelszeiten, Preis-/Mengenraster, Kosten, Auflösung, Zeitraum und Nutzungsbedingungen festhalten. Rohdaten unverändert außerhalb Git lagern, normalisierte Version mit Kennung referenzieren. Trainings-, Validierungs- und finalen Testzeitraum festlegen. Vorhersageziel, Verfügbarkeit und geplante Ein-/Ausstiege abstimmen; die bisherige Close-Label-/Open-Exit-Abweichung bewusst entscheiden, nicht übersehen.
 
 **Abnahme:** Ein wiederholbarer Import und Ridge-/Regel-Referenzlauf auf denselben Daten; fachlich überprüfte Beispiel-Labels, getestete Zeitgrenzen und dokumentierte Datensatzkennung. Keine großen Datensätze oder Secrets im Git-Repo. Ein finaler Testzeitraum wird nicht für laufendes Tuning genutzt.
 
 ### AP2 — Einheitliche Experiment-Konfiguration und Laufverwaltung
+
+**Technisch abgeschlossen.** Konfigurierbare lokale CLI, überprüfte Snapshots/Parents/Replays, Status/Logs und explizite Vergleichsbedingungen sind implementiert. Abnahme mit echten Läufen, 786 Tests, unabhängigem Review und installiertem Wheel: [AP2_RESULTS.md](AP2_RESULTS.md). Keine Freigabe für AP3 oder spätere Pakete daraus ableiten.
 
 Ein konfigurierbarer Ablauf für Daten -> Training -> eingefrorenes Modell -> Vorhersagen -> Backtest -> Bericht. Jeder Run erhält ID, optionalen Parent, Hypothese, unveränderlichen Konfigurationssnapshot, Datensatz-/Split-/Feature-/Zielversion, Code-/Dependency-Stand, Seed, Status, Logs und Artefaktpfade. Vorhersageartefakte machen Modell und Handelsregel getrennt auswertbar. Für den Start genügt ein einfacher lokaler Mechanismus statt zusätzlicher Plattform-Infrastruktur.
 

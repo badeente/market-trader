@@ -101,4 +101,4 @@ Veröffentlicht unter `http://10.10.1.136:8086/reports/ap1-deuidxeur-2024-refere
 
 Automatisierte visuelle Prüfung ist blockiert: Chromium fehlt `libatk-1.0.so.0`. Keine privilegierten Systempakete installiert. HTTP-/Byteprüfung ist möglich und wird getrennt von einer echten Browser-Sichtprüfung ausgewiesen.
 
-Noch keine AP2-Runverwaltung, Parameteroberfläche, neuronalen Netze oder Live-Trading implementiert. Kein Commit/Push freigegeben oder durchgeführt.
+AP1 enthielt noch keine AP2-Runverwaltung, Parameteroberfläche, neuronalen Netze oder Live-Trading. Andreas hat AP1-Commit/Push und anschließend AP2 freigegeben: AP1 wurde als `655b82c` auf `origin/main` gepusht. Den nachfolgenden AP2-Stand dokumentiert [AP2_EXPERIMENTS.md](AP2_EXPERIMENTS.md).
