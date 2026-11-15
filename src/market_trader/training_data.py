@@ -13,6 +13,8 @@ from market_trader.normalization import NormalizedDataset
 TRAINING_DATA_FORMAT = "market-trader.training-data.v1"
 FEATURE_NAMES = ("return_1", "window_return", "range_fraction", "close_vs_mean")
 TARGET_NAME = "forward_return_next_open_to_horizon_close"
+OPEN_TARGET_NAME = "forward_return_next_open_to_horizon_open"
+OPEN_TRAINING_DATA_FORMAT = "market-trader.training-data.v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +118,58 @@ def build_training_data(dataset: NormalizedDataset, config: TrainingConfig) -> T
 
     for split, rows in splits.items():
         if not rows:
+            raise ValueError(f"{split} split has no eligible examples")
+    return TrainingDataset(
+        config, FEATURE_NAMES, tuple(splits["train"]), tuple(splits["validation"]), tuple(splits["test"]),
+    )
+
+
+def build_open_training_data(
+    dataset: NormalizedDataset, config: TrainingConfig, *, include_test: bool = True,
+) -> TrainingDataset:
+    """Build next-open to horizon-open labels, including the exit bar's availability."""
+    if dataset.quality.gaps:
+        raise ValueError("training data requires a candle series without active gaps")
+    window_size = config.lookback_bars + config.horizon_bars + 1
+    windows = rolling_windows(dataset.candles, size=window_size)
+    if any(candle.open <= 0 or candle.close <= 0 for candle in dataset.candles):
+        raise ValueError("training data requires positive open and close prices")
+    calendar = dataset.config.calendar
+    splits: dict[str, list[TrainingExample]] = {"train": [], "validation": [], "test": []}
+    with localcontext(Context(prec=28, rounding=ROUND_HALF_EVEN, Emin=MIN_EMIN, Emax=MAX_EMAX)):
+        for window in windows:
+            history, future = window[:config.lookback_bars], window[config.lookback_bars:]
+            first, entry, exit_bar = history[0], future[0], future[config.horizon_bars]
+            decision_at = history[-1].close_time
+            if not include_test and decision_at >= config.test_start:
+                continue
+            if isinstance(calendar, SessionCalendar):
+                session = calendar.session_at(first.open_time)
+                if session is None or exit_bar.close_time > session.close_time:
+                    continue
+            if exit_bar.close_time - first.open_time != window_size * first.interval:
+                raise ValueError("training windows cannot contain active gaps")
+            decision_at = history[-1].close_time
+            if any(candle.available_at > decision_at for candle in history):
+                continue
+            target_available_at = max(candle.available_at for candle in future)
+            if decision_at < config.validation_start:
+                if target_available_at >= config.validation_start:
+                    continue
+                split = "train"
+            elif decision_at < config.test_start:
+                if target_available_at >= config.test_start:
+                    continue
+                split = "validation"
+            else:
+                split = "test"
+            splits[split].append(TrainingExample(
+                decision_at=decision_at, entry_at=entry.open_time, exit_at=exit_bar.open_time,
+                target_available_at=target_available_at, features=candle_features(history),
+                target_return=(exit_bar.open - entry.open) / entry.open,
+            ))
+    for split, rows in splits.items():
+        if not rows and (split != "test" or include_test):
             raise ValueError(f"{split} split has no eligible examples")
     return TrainingDataset(
         config, FEATURE_NAMES, tuple(splits["train"]), tuple(splits["validation"]), tuple(splits["test"]),

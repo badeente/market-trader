@@ -83,6 +83,16 @@ gesamten Lauf. Der JSON-Bericht enthält zusätzlich `dataset_artifact_id`.
 
 ## Wiederverwendbarer HTML-Bericht
 
+Die Berichtserzeugung prüft nun die interne Konsistenz von Fills, Gebühren,
+Brutto-/Netto-P&L, Ausführungsprofil und Kontoverlauf. Widersprüchliche Eingaben
+werden vor der HTML-Veröffentlichung abgewiesen. Das ersetzt keine unabhängige
+Prüfung der Marktdaten; insbesondere lässt sich die Bewertung einer offenen
+Position ohne zugehörige Kerzen nicht vollständig nachrechnen.
+
+Für den nur lesenden Zugriff im Browser siehe [REPORT_VIEWER.md](REPORT_VIEWER.md).
+`market-trader serve-reports` bietet eine separate interne HTML-Übersicht;
+Quellcode, JSON und CSV werden darüber nicht bereitgestellt.
+
 Der Bericht liest bereits gespeicherte Ergebnisse. Die HTML-Datei lässt sich
 direkt im Browser öffnen. Bei der Erzeugung werden weder ein Modell trainiert
 noch ein Backtest ausgeführt. Für die Vorhersagepunkte und den einzelnen
@@ -324,3 +334,29 @@ verwendeten Merkmalsfunktion ergab bytegleiche Daten.
 Vier Varianten in `tests/test_backtesting.py` prüfen feste Mengen für
 `sma_crossover`. Der bestehende Fall mit Risikobudget und Stop wird
 weiter ausgeführt.
+
+## AP1: eingefrorenes echtes Referenzexperiment
+
+Freigegebener Vertrag: [AP1_REFERENCE_EXPERIMENT.md](AP1_REFERENCE_EXPERIMENT.md).
+Ausgeführte Ergebnisse, private Artefaktpfade, Kostenannahmen und Wiederholung:
+[AP1_RESULTS.md](AP1_RESULTS.md).
+
+```sh
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q
+/home/hermes/workspace/.venvs/market-trader-ap1/bin/market-trader reference \
+  --config configs/ap1-reference.toml \
+  --output /home/hermes/workspace/var/market-trader/runs/ap1-new-reproduction
+```
+
+Nach der Audit-Grenzkorrektur: **653 Tests bestanden**. Die AP1-Tests liegen in
+`test_dukascopy_import.py`, `test_open_target.py`, `test_sma_timed.py`,
+`test_reference.py` und `test_reference_reporting.py`. Sie nutzen nur kleine
+synthetische Eingaben, einschließlich veränderter 2025-Preise zum Leakage-Test.
+Der echte Lauf erzeugt 18.528 Trainings- und 6.192 Validierungsbeispiele;
+reservierte Testzeilen bleiben leer. Bestehende v1-Targets und Artefakte bleiben
+getrennt vom neuen Open-to-Open-v2-Vertrag unterstützt.
+
+Zwei vollständige echte Läufe aus gleicher Umgebung erzeugten alle 15 Dateien
+bytegleich. Ein separater Wheel-Lauf bestätigte gleiche fachliche Ergebnisse.
+Die JSON-/Quell-/Label-/Trade-Prüfung steht privat unter
+`var/market-trader/acceptance/verify_ap1.py`; dort wird 2025 nicht modelliert.

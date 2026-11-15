@@ -24,6 +24,7 @@ from market_trader.coverage import DatasetRequest, validate_requests
 from market_trader.data import read_candles
 from market_trader.normalization import NormalizationConfig, NormalizedDataset, normalize_candles
 from market_trader.reporting import BACKTEST_REPORT_FORMAT, render_report
+from market_trader.report_server import create_report_server
 from market_trader.storage import fingerprint_source, load_dataset, publish_new_file, save_dataset
 from market_trader.strategies import configure_strategy
 from market_trader.training_data import (
@@ -354,8 +355,42 @@ def main(argv: list[str] | None = None) -> int:
     report.add_argument("--output", type=Path, required=True, help="New HTML file")
     report.set_defaults(action="report")
 
+    serve = commands.add_parser("serve-reports", help="Read-only internal HTML report viewer")
+    serve.add_argument("--directory", type=Path, required=True, help="Dedicated directory of published HTML files")
+    serve.add_argument("--bind", default="127.0.0.1", help="Explicit private IPv4 address (default: loopback)")
+    serve.add_argument("--port", type=int, default=8086)
+    serve.add_argument("--allow-network", action="append", default=[], help="Allowed private IPv4 subnet; repeatable")
+    serve.set_defaults(action="serve-reports")
+
+    reference = commands.add_parser("reference", help="Run the frozen AP1 reference protocol; reserve 2025")
+    reference.add_argument("--config", type=Path, required=True)
+    reference.add_argument("--output", type=Path, required=True, help="New private artifact directory")
+    reference.set_defaults(action="reference")
+
     args = parser.parse_args(argv)
     try:
+        if args.action == "reference":
+            from market_trader.reference import run_reference
+
+            try:
+                summary = run_reference(args.config, args.output)
+            except (OSError, ValueError, ArithmeticError) as error:
+                raise _CommandError(f"AP1 reference: {error}") from error
+            print(json.dumps(summary, sort_keys=True))
+            return 0
+        if args.action == "serve-reports":
+            try:
+                with create_report_server(
+                    args.directory, bind=args.bind, port=args.port,
+                    allowed_networks=("127.0.0.0/8", *args.allow_network),
+                ) as server:
+                    print(f"Report viewer listening on {args.bind}:{server.server_address[1]}", flush=True)
+                    server.serve_forever()
+            except KeyboardInterrupt:
+                return 0
+            except (OSError, ValueError) as error:
+                raise _CommandError(f"serve reports: {error}") from error
+            return 0
         if args.action == "report":
             _write_html_report(args)
             print(args.output)

@@ -1,6 +1,5 @@
 """Build a standalone HTML report from saved offline results."""
 
-from datetime import datetime, timedelta
 from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
 from hashlib import sha256
 from math import isfinite
@@ -8,6 +7,7 @@ from pathlib import Path
 
 from market_trader._dataset_codec import json_bytes, parse_json
 from market_trader.baseline import HELD_OUT_FORMAT, SavedRidgeModel, held_out_evaluation, load_ridge_model
+from market_trader.report_validation import number as _number, timestamp as _timestamp, validate_ledger
 from market_trader.storage import load_dataset
 from market_trader.training_data import FEATURE_NAMES, candle_features
 
@@ -21,25 +21,8 @@ def _read_report(path: Path, expected_format: str) -> dict:
     return data
 
 
-def _timestamp(value: str) -> datetime:
-    if not isinstance(value, str):
-        raise ValueError("expected a UTC timestamp in saved results")
-    timestamp = datetime.fromisoformat(value)
-    if timestamp.utcoffset() != timedelta(0):
-        raise ValueError("report timestamps must be in UTC")
-    return timestamp
-
-
-def _number(value: str) -> Decimal:
-    if not isinstance(value, str):
-        raise ValueError("expected a decimal string in backtest results")
-    result = Decimal(value)
-    if not result.is_finite():
-        raise ValueError("backtest amounts must be finite")
-    return result
-
-
 def _run_summary(report: dict) -> dict:
+    validate_ledger(report)
     strategy = report["strategy"]
     if not isinstance(strategy["name"], str) or not strategy["name"]:
         raise ValueError("backtest strategy must have a name")
@@ -82,6 +65,10 @@ def _run_summary(report: dict) -> dict:
         ) * _number(entry["quantity"])
         entry_fee, exit_fee = _number(entry["fee"]), _number(exit_fill["fee"])
         gross = _number(trade["gross_pnl"])
+        difference = (_number(exit_fill["price"]) - _number(entry["price"]) if side == "buy"
+                      else _number(entry["price"]) - _number(exit_fill["price"]))
+        if gross != difference * _number(entry["quantity"]):
+            raise ValueError("trade gross P&L does not match executed fills")
         if gross - entry_fee - exit_fee != _number(trade["net_pnl"]):
             raise ValueError("trade net P&L does not match gross P&L and fees")
         trade["reference_pnl"] = str(reference_pnl)
@@ -187,7 +174,16 @@ def _explain_ridge_trades(run: dict, model: SavedRidgeModel, dataset_path: Path)
 def render_report(backtest: Path, *, compare: Path | None = None, evaluation: Path | None = None,
                   model: Path | None = None, training_data: Path | None = None,
                   dataset: Path | None = None) -> bytes:
-    """Render backtest results and optional Ridge forecast details without fitting a model."""
+    """Render internally consistent saved results; malformed input raises ValueError."""
+    try:
+        return _render_report(backtest, compare=compare, evaluation=evaluation, model=model,
+                              training_data=training_data, dataset=dataset)
+    except (KeyError, TypeError, AttributeError, IndexError, ArithmeticError) as error:
+        raise ValueError(f"malformed saved report: {error}") from None
+
+
+def _render_report(backtest: Path, *, compare: Path | None, evaluation: Path | None,
+                   model: Path | None, training_data: Path | None, dataset: Path | None) -> bytes:
     primary = _read_report(backtest, BACKTEST_REPORT_FORMAT)
     comparison = _read_report(compare, BACKTEST_REPORT_FORMAT) if compare is not None else None
     with localcontext(Context(prec=28, rounding=ROUND_HALF_EVEN)):

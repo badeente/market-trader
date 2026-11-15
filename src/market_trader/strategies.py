@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -112,6 +113,65 @@ def _configure_sma_crossover(table: dict, _price_tick: Decimal, _config_dir: Pat
     entry = Signal(Action.ENTER_LONG, **sizing)
     return ConfiguredStrategy(
         "sma_crossover", slow + 1, tuple(parameters.items()), lambda _: _sma_crossover(entry, fast, slow),
+    )
+
+
+def _sma_timed(
+    entry: Signal, fast: int, slow: int, holding_bars: int, dataset: NormalizedDataset | None,
+) -> Callable[[Decision], Signal]:
+    """Bind the fixed holding clock; all trading/accounting stays in the engine."""
+    if dataset is None:
+        raise ValueError("sma_timed requires the evaluation dataset")
+    interval = dataset.interval
+    if not isinstance(interval, timedelta) or interval <= timedelta(0):
+        raise ValueError("sma_timed requires a positive dataset interval")
+    duration = interval * holding_bars
+    calendar = dataset.config.calendar
+
+    def decide(decision: Decision) -> Signal:
+        window = decision.window
+        if len(window) != slow:
+            raise ValueError("sma_timed requires the exact slow_period lookback")
+        if (decision.at != window[-1].close_time
+                or any(bar.interval != interval or bar.instrument != dataset.instrument
+                       or bar.close_time - bar.open_time != interval
+                       or bar.available_at > decision.at for bar in window)):
+            raise ValueError("sma_timed decision window does not match the bound dataset or close clock")
+        if decision.position is not None:
+            if decision.position.entry.side != "buy":
+                return _HOLD
+            exit_at = decision.position.entry.candle_open_time + duration
+            return _EXIT if decision.at >= exit_at else _HOLD
+        if isinstance(calendar, SessionCalendar):
+            session = calendar.session_at(window[0].open_time)
+            # No boundary entry: the next-open exit must actually exist in this session.
+            if (session is None or decision.at + duration >= session.close_time
+                    or any(calendar.session_at(bar.open_time) != session
+                           or bar.close_time > session.close_time for bar in window)):
+                return _HOLD
+        if any(left.close_time != right.open_time for left, right in zip(window, window[1:])):
+            raise ValueError("sma_timed decision window must contain consecutive candles")
+        closes = tuple(candle.close for candle in window)
+        return entry if mean_decimals(closes[-fast:]) > mean_decimals(closes) else _HOLD
+
+    return decide
+
+
+def _configure_sma_timed(table: dict, _price_tick: Decimal, _config_dir: Path) -> ConfiguredStrategy:
+    require_fields(table, "strategy", "name", "fast_period", "slow_period", "holding_bars", "quantity")
+    for field in ("fast_period", "slow_period", "holding_bars"):
+        if type(table[field]) is not int or table[field] <= 0:
+            raise ValueError(f"strategy.{field} must be a positive integer")
+    fast, slow, holding = table["fast_period"], table["slow_period"], table["holding_bars"]
+    if fast >= slow:
+        raise ValueError("strategy.fast_period must be smaller than slow_period")
+    quantity = _fixed_quantity(table["quantity"])
+    parameters = {"fast_period": fast, "slow_period": slow,
+                  "holding_bars": holding, "quantity": quantity}
+    entry = Signal(Action.ENTER_LONG, quantity=quantity)
+    return ConfiguredStrategy(
+        "sma_timed", slow, tuple(parameters.items()),
+        lambda dataset: _sma_timed(entry, fast, slow, holding, dataset),
     )
 
 
@@ -230,6 +290,7 @@ def _configure_ridge_long(table: dict, _price_tick: Decimal, config_dir: Path) -
 _REGISTRY = {
     "single_long": _configure_single_long,
     "sma_crossover": _configure_sma_crossover,
+    "sma_timed": _configure_sma_timed,
     "two_legged_pullback": _configure_two_legged_pullback,
     "ridge_long": _configure_ridge_long,
 }

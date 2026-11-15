@@ -1,0 +1,6 @@
+# Frozen AP1 protocol. Only input location/hash are configurable here.
+# Research/training/execution settings are recorded in reference-policy.json.
+version = 1
+experiment = "ap1-deuidxeur-open30-v1"
+source_csv = "../../../var/market-trader/raw/dukascopy-deuidxeur-2021-2025-v1/deuidxeur-2021-01-01-2026-01-01-m15-bid-utc.csv"
+source_sha256 = "sha256:d7c694f295a863076b4b00ceb0a2adfbeed6f1b0458a2098a52cd171e24cef2f"

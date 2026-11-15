@@ -85,12 +85,12 @@ def test_report_rejects_mismatched_inputs_without_creating_html(tmp_path, proble
 
 @pytest.mark.case("REP-009")
 def test_report_escapes_data_and_supports_a_run_without_trades(tmp_path):
-    source = saved_run(tmp_path, BACKTEST)
-    report = json.loads(source.read_bytes())
+    from tests.test_report_validation import report_body, save_report
+
+    report = report_body()
     marker = "</script><script>alert(1)</script>"
     report["strategy"]["name"] = marker
-    report["trades"] = []
-    source.write_text(json.dumps(report), encoding="utf-8")
+    source = save_report(tmp_path, report)
     output = tmp_path / "report.html"
     result = command(ROOT, "report", "--backtest", source, "--output", output)
     assert result.returncode == 0, result.stderr
