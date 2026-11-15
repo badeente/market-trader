@@ -11,7 +11,7 @@ Dieser Entwurf priorisiert die vorhandenen ROADMAP.md und MODEL_DEVELOPMENT_ROAD
 - Offline-Datenverarbeitung und Backtester mit gemeinsamen Ausführungs-/Kostenregeln.
 - Chronologische Trainingsdaten, Ridge-Referenz, eingefrorene Modellinferenz und Modell-Backtest.
 - HTML-Berichte; lokale Berichtskonsistenzprüfung und interner Viewer wurden ergänzt.
-- Letzter ausgeführter Gesamttest nach AP2-Implementierung: 786 Tests bestanden. Referenz- und Experimentabnahme siehe [AP1_RESULTS.md](AP1_RESULTS.md) und [AP2_RESULTS.md](AP2_RESULTS.md).
+- Letzter ausgeführter Gesamttest nach AP3:891Tests bestanden; ohneTorch885bestanden und6reineTrainingstests übersprungen. Abnahmen: [AP1_RESULTS.md](AP1_RESULTS.md), [AP2_RESULTS.md](AP2_RESULTS.md), [AP3_RESULTS.md](AP3_RESULTS.md).
 - Der Report-Service ist auf Hermes installiert und läuft separat aus einem Wheel; Andreas hat Browser- und VPN-Zugriff bestätigt.
 - AP1-/Report-/Viewer-Stand ist unter `655b82c` committed und auf `origin/main` verifiziert. Andreas hat anschließend AP2 zur Umsetzung freigegeben; aktueller Stand in [AP2_EXPERIMENTS.md](AP2_EXPERIMENTS.md).
 
@@ -40,6 +40,8 @@ Ein konfigurierbarer Ablauf für Daten -> Training -> eingefrorenes Modell -> Vo
 **Abnahme:** Ein Ridge-Experiment lässt sich mit einem dokumentierten Aufruf ausführen und aus seiner Konfiguration erneut starten. Alte Ergebnisse werden nicht überschrieben. Unterschiedliche Daten-/Kostenbedingungen werden erkennbar und nicht stillschweigend als fairer Modellvergleich behandelt. Reproduzierbarkeit wird geprüft; ein Seed allein ist keine plattformübergreifende Bitgleichheitsgarantie.
 
 ### AP3 — Erstes kleines tabellarisches neuronales Modell, Ende-zu-Ende
+
+**Technisch abgeschlossen.** Das festgelegte MLP4→16→8→1 wurde tatsächlich trainiert, sicher gespeichert/geladen, im bestehenden Ledger bewertet und intern als Vergleich zu Ridge/Null/SMA veröffentlicht. Reales Replay,891Tests,885/6ohneTorch und unabhängige Reviews: [AP3_RESULTS.md](AP3_RESULTS.md). Negative Leistung ist dokumentiert;2025 bleibt reserviert. AP4 ist das nächste vorgeschlagene Paket, nicht automatisch freigegeben.
 
 Separates, festgelegtes Trainingsenvironment erproben, das den vorhandenen Backtest nicht destabilisiert. Zunächst dieselben Merkmale, Zieldefinitionen und Zeitgrenzen wie die Ridge-Referenz verwenden. Kleines neuronales Modell trainieren, Training/Validierung protokollieren, Gewichte und Vorverarbeitung speichern, zeitgestempelte Vorhersagen exportieren und im vorhandenen Backtester bewerten.
 

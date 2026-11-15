@@ -383,3 +383,28 @@ in keinem dieser Läufe modelliert oder bewertet.
 Eine JSON-Datei kann syntaktisch gültig sein, ohne ein Run-Objekt zu enthalten:
 Array, null, String und Zahl werden daher explizit mit verständlichem Fehler
 abgewiesen, statt über einen AttributeError einen rohen CLI-Traceback auszugeben.
+
+## AP3: erster neuronaler Vergleich
+
+Vertrag: [AP3_NEURAL_REFERENCE.md](AP3_NEURAL_REFERENCE.md).
+Isolierter, hashgeprüfter CPU-Stack: [AP3_ENVIRONMENT.md](AP3_ENVIRONMENT.md).
+Reale Ergebnisse, Run-IDs, Replay und Einschränkungen: [AP3_RESULTS.md](AP3_RESULTS.md).
+
+```sh
+/home/hermes/workspace/.venvs/market-trader-ap3/bin/python -m pytest -q
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q
+/home/hermes/workspace/.venvs/market-trader-ap3/bin/market-trader experiment run \
+  --config configs/ap3-neural-reference.toml \
+  --registry /home/hermes/workspace/var/market-trader/experiments/my-neural-runs
+```
+
+Finaler Stand: **891 Tests bestanden** mit dem Trainingsstack; ohne Torch
+**885 bestanden, 6 reine Trainingstests übersprungen**. Modell-JSON, Inferenz,
+Strategie und Berichte bleiben ohne Torch/NumPy nutzbar. Der echte Replay ist
+in allen 22 Backend-Artefakten bytegleich; 6.192 Reload-Prognosen wurden exakt
+geprüft. Eingabe-/Zielskalierer wurden separat aus Training nachgerechnet,
+alle MLP-/Ridge-/SMA-Trades gegen Quell-Opens und Kosten reconciled.
+
+Frühes Stoppen wählt den Checkpoint auf 2024; diese Werte sind ausdrücklich
+Entwicklungs-/Selektionsmetriken, keine unabhängigen finalen Testwerte.
+2025 wurde weder zum Training noch zur Modellbewertung verwendet.

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
 from fractions import Fraction
 from hashlib import sha256
+from importlib.metadata import PackageNotFoundError, version
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -64,6 +65,19 @@ def execute_experiment(config: ExperimentConfig, output: Path) -> dict:
     config = experiment_config_from_payload(experiment_config_payload(config))
     snapshot = experiment_config_payload(config)
     runtime = _runtime()
+    # Metadata lookup is identical for both choices and never imports Torch/NumPy.
+    # With neither optional distribution installed the AP2 runtime shape is unchanged.
+    distributions = {}
+    for name in ('torch', 'numpy'):
+        try:
+            distributions[name] = version(name)
+        except PackageNotFoundError:
+            pass
+    if distributions:
+        runtime['distributions'] = distributions
+    lock = Path(__file__).resolve().parents[2] / 'requirements' / 'ap3-cpu-lock.txt'
+    if lock.is_file():
+        runtime['dependency_lock_sha256'] = 'sha256:' + sha256(lock.read_bytes()).hexdigest()
     template = Path(__file__).with_name('report_template.html.in')
     runtime['report_template_sha256'] = 'sha256:' + sha256(template.read_bytes()).hexdigest()
     imported = import_dukascopy_reference(config.source_csv, instrument='deuidxeur',
@@ -109,6 +123,27 @@ def execute_experiment(config: ExperimentConfig, output: Path) -> dict:
         if load_ridge_model(model_path).target_name != OPEN_TARGET_NAME:
             raise ValueError('incompatible AP2 model target')
         evaluation, points = validation_evaluation(model_path, training_path)
+        ridge_evaluation, ridge_points = evaluation, points
+        if config.model_kind == 'mlp':
+            # Only this explicit branch loads the optional neural training module.
+            from market_trader.neural import mlp_report, load_mlp_model, mlp_validation_evaluation
+            _write_json(stage / 'ridge-validation-evaluation.json', ridge_evaluation)
+            _write_json(stage / 'ridge-validation-predictions.json', ridge_points)
+            model_path = stage / 'mlp-model.json'
+            model_report = mlp_report(training_path, seed=config.seed)
+            _write_json(model_path, model_report)
+            if load_mlp_model(model_path).target_name != OPEN_TARGET_NAME:
+                raise ValueError('incompatible AP3 model target')
+            evaluation, points = mlp_validation_evaluation(model_path, training_path)
+            if ([(p['at'], p['actual']) for p in points]
+                    != [(p['at'], p['actual']) for p in ridge_points]):
+                raise ValueError('MLP and Ridge validation cohorts do not match')
+            _write_json(stage / 'mlp-validation-evaluation.json', evaluation)
+            _write_json(stage / 'mlp-validation-predictions.json', points)
+            _write_json(stage / 'training-history.json', {
+                'format': 'market-trader.mlp-training-history.v1',
+                'model_report_id': model_report['report_id'],
+                'training_data_id': model_report['training_data_id'], **model_report['training']})
         if any(not _VALIDATION <= datetime.fromisoformat(point['at']) < _TEST for point in points):
             raise ValueError('validation forecasts escaped 2024')
         _write_json(stage / 'validation-evaluation.json', evaluation)
@@ -121,6 +156,13 @@ def execute_experiment(config: ExperimentConfig, output: Path) -> dict:
             validation, val_manifest, val_origin, runtime, profile)
         for report in (ridge, sma):
             _assert_trade_alignment(report, training.validation)
+        primary_name = 'ridge'
+        if config.model_kind == 'mlp':
+            mlp = _backtest(stage, 'mlp', {'name': 'mlp_long', 'model_report': 'mlp-model.json',
+                'entry_threshold': config.entry_threshold, 'quantity': Decimal(1)},
+                validation, val_manifest, val_origin, runtime, profile)
+            _assert_trade_alignment(mlp, training.validation)
+            primary_name = 'mlp'
         signature = {'source_sha256': imported.source.sha256,
             'development_dataset_id': development.dataset_id, 'validation_dataset_id': validation.dataset_id,
             'target_name': OPEN_TARGET_NAME, 'feature_names': list(training.feature_names),
@@ -140,10 +182,22 @@ def execute_experiment(config: ExperimentConfig, output: Path) -> dict:
             'runtime': runtime, 'comparison_signature': signature,
             'validation_forecast': evaluation['validation'],
             'trading': {'ridge': trading_summary(ridge), 'sma_timed': trading_summary(sma)}}
+        if config.model_kind == 'mlp':
+            summary['training_data_id'] = model_report['training_data_id']
+            summary['training'] = model_report['training']
+            summary['validation_forecast'] = {
+                'mlp': evaluation['validation']['mlp'],
+                'ridge': ridge_evaluation['validation']['ridge'],
+                'zero': evaluation['validation']['zero_return'],
+                # Preserve the existing baseline name as an explicit alias.
+                'zero_return': evaluation['validation']['zero_return'],
+                **{key: evaluation['validation'][key] for key in
+                   ('row_count', 'first_decision_at', 'last_decision_at')}}
+            summary['trading']['mlp'] = trading_summary(mlp)
         # Normalize once, so the API and stored summary have identical JSON semantics.
         summary = json.loads(json_bytes(summary, default=_json_value))
         _write_json(stage / 'summary.json', summary)
-        report = render_report(stage / 'ridge-backtest.json', compare=stage / 'sma-backtest.json',
+        report = render_report(stage / f'{primary_name}-backtest.json', compare=stage / 'sma-backtest.json',
                                model=model_path, dataset=stage / 'validation-dataset.json')
         publish_new_file(stage / 'report.html', enrich_experiment_report(report, summary=summary))
         if (_source_id() != runtime['code_id']

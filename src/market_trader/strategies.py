@@ -8,9 +8,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from market_trader._config import config_decimal, require_fields
+from market_trader._dataset_codec import parse_json
 from market_trader._numeric import mean_decimals, round_to_grid
 from market_trader.backtesting import Action, Decision, ExecutionProfile, Signal
-from market_trader.baseline import SavedRidgeModel, load_ridge_model
+from market_trader.baseline import BASELINE_FORMAT, OPEN_BASELINE_FORMAT, load_ridge_model
 from market_trader.calendars import SessionCalendar
 from market_trader.normalization import NormalizedDataset
 from market_trader.training_data import candle_features
@@ -234,23 +235,25 @@ def _configure_two_legged_pullback(table: dict, price_tick: Decimal, _config_dir
     )
 
 
-def _ridge_long(
-    saved: SavedRidgeModel, threshold: Decimal, entry: Signal, dataset: NormalizedDataset | None,
+def _learned_long(
+    saved, threshold: Decimal, entry: Signal, dataset: NormalizedDataset | None,
+    *, name: str = "ridge_long",
 ) -> Callable[[Decision], Signal]:
     if dataset is None:
-        raise ValueError("ridge_long requires the evaluation dataset")
+        raise ValueError(f"{name} requires the evaluation dataset")
+    model_name = name.removesuffix("_long")
     if dataset.instrument != saved.instrument:
-        raise ValueError("ridge model instrument does not match the evaluation dataset")
+        raise ValueError(f"{model_name} model instrument does not match the evaluation dataset")
     if dataset.interval != saved.interval:
-        raise ValueError("ridge model candle interval does not match the evaluation dataset")
+        raise ValueError(f"{model_name} model candle interval does not match the evaluation dataset")
     if dataset.candles and dataset.candles[0].open_time <= saved.last_target_available_at:
-        raise ValueError("ridge evaluation candles must start after the model training cutoff")
+        raise ValueError(f"{model_name} evaluation candles must start after the model training cutoff")
     duration = saved.interval * saved.config.horizon_bars
     calendar = dataset.config.calendar
 
     def decide(decision: Decision) -> Signal:
         if len(decision.window) != saved.config.lookback_bars:
-            raise ValueError("ridge_long requires the exact model lookback")
+            raise ValueError(f"{name} requires the exact model lookback")
         if decision.position is not None:
             exit_at = decision.position.entry.candle_open_time + duration
             return _EXIT if decision.at >= exit_at else _HOLD
@@ -283,11 +286,57 @@ def _configure_ridge_long(table: dict, _price_tick: Decimal, config_dir: Path) -
     )
     return ConfiguredStrategy(
         "ridge_long", saved.config.lookback_bars, parameters,
-        lambda dataset: _ridge_long(saved, threshold, entry, dataset),
+        lambda dataset: _learned_long(saved, threshold, entry, dataset),
     )
 
 
+def load_frozen_model(path: Path, *, expected_kind: str | None = None):
+    """Dispatch only explicitly supported JSON artifacts; inference needs no Torch."""
+    try:
+        artifact = parse_json(path.read_text(encoding="utf-8"), allow_floats=True)
+    except ValueError as error:
+        raise ValueError(f"invalid model JSON: {error}") from None
+    if not isinstance(artifact, dict):
+        raise ValueError("model JSON must be an object")
+    formats = {BASELINE_FORMAT: "ridge", OPEN_BASELINE_FORMAT: "ridge",
+               "market-trader.mlp-validation.v1": "mlp"}
+    artifact_format = artifact.get("format")
+    if not isinstance(artifact_format, str):
+        raise ValueError("model artifact format must be a string")
+    kind = formats.get(artifact_format)
+    if kind is None or (expected_kind is not None and kind != expected_kind):
+        raise ValueError("unsupported model artifact format")
+    if (not isinstance(artifact.get("model"), dict)
+            or artifact["model"].get("kind") != kind):
+        raise ValueError("model kind does not match the artifact format")
+    if kind == "ridge":
+        return load_ridge_model(path)
+    from market_trader.training_data import OPEN_TARGET_NAME
+    if artifact.get("target_name") != OPEN_TARGET_NAME:
+        raise ValueError("MLP model target must be next-open to horizon-open")
+    from market_trader.neural import load_mlp_model
+    return load_mlp_model(path)
+
+
+def _configure_mlp_long(table: dict, _price_tick: Decimal, config_dir: Path) -> ConfiguredStrategy:
+    require_fields(table, "strategy", "name", "model_report", "entry_threshold", "quantity")
+    model_report = table["model_report"]
+    if not isinstance(model_report, str) or not model_report or model_report != model_report.strip():
+        raise ValueError("strategy.model_report must be a nonempty path without padding")
+    threshold = config_decimal(table["entry_threshold"], "strategy.entry_threshold")
+    quantity = _fixed_quantity(table["quantity"])
+    if threshold < 0:
+        raise ValueError("strategy.entry_threshold must be nonnegative")
+    saved = load_frozen_model(config_dir / model_report, expected_kind="mlp")
+    entry = Signal(Action.ENTER_LONG, quantity=quantity)
+    parameters = (("model_report_id", saved.report_id), ("entry_threshold", threshold),
+                  ("quantity", quantity), ("horizon_bars", saved.config.horizon_bars))
+    return ConfiguredStrategy("mlp_long", saved.config.lookback_bars, parameters,
+                              lambda dataset: _learned_long(saved, threshold, entry, dataset, name="mlp_long"))
+
+
 _REGISTRY = {
+    "mlp_long": _configure_mlp_long,
     "single_long": _configure_single_long,
     "sma_crossover": _configure_sma_crossover,
     "sma_timed": _configure_sma_timed,

@@ -6,9 +6,11 @@ from math import isfinite
 from pathlib import Path
 
 from market_trader._dataset_codec import json_bytes, parse_json
-from market_trader.baseline import HELD_OUT_FORMAT, SavedRidgeModel, held_out_evaluation, load_ridge_model
+from market_trader.baseline import HELD_OUT_FORMAT, SavedRidgeModel, held_out_evaluation
+from market_trader.calendars import SessionCalendar
 from market_trader.report_validation import number as _number, timestamp as _timestamp, validate_ledger
 from market_trader.storage import load_dataset
+from market_trader.strategies import load_frozen_model
 from market_trader.training_data import FEATURE_NAMES, candle_features
 
 BACKTEST_REPORT_FORMAT = "market-trader.backtest-report.v1"
@@ -100,6 +102,9 @@ def _forecast_summary(evaluation: Path | None, model: Path | None, training_data
                       model_id: str | None) -> dict | None:
     if training_data is not None and model is None:
         raise ValueError("--training-data requires --model")
+    if model is not None and (training_data is not None or evaluation is not None):
+        if not isinstance(load_frozen_model(model), SavedRidgeModel):
+            raise ValueError("MLP does not support legacy held-out evaluation; use the validation experiment report")
     saved = None
     if evaluation is not None:
         saved = _read_report(evaluation, HELD_OUT_FORMAT)
@@ -132,16 +137,23 @@ def _forecast_summary(evaluation: Path | None, model: Path | None, training_data
             "test": test, "points": points, "report_id": saved["report_id"]}
 
 
-def _explain_ridge_trades(run: dict, model: SavedRidgeModel, dataset_path: Path) -> None:
+def _explain_model_trades(run: dict, model, dataset_path: Path) -> None:
     stored = load_dataset(dataset_path)
     dataset = stored.dataset
     strategy = run["strategy"]
+    expected_name = "ridge_long" if isinstance(model, SavedRidgeModel) else "mlp_long"
+    if strategy["name"] != expected_name:
+        raise ValueError("model kind does not match the primary backtest strategy")
+    if strategy.get("horizon_bars") != model.config.horizon_bars:
+        raise ValueError("model horizon does not match the primary backtest")
     if (dataset.dataset_id != run["dataset_id"]
             or (run["dataset_artifact_id"] is not None
                 and stored.manifest.artifact_id != run["dataset_artifact_id"])):
         raise ValueError("dataset does not match the primary backtest")
     if dataset.instrument != model.instrument or dataset.interval != model.interval:
         raise ValueError("model instrument or interval does not match the backtest dataset")
+    if dataset.candles and dataset.candles[0].open_time <= model.last_target_available_at:
+        raise ValueError("evaluation candles must start after the model training cutoff")
     lookback = model.config.lookback_bars
     if strategy["lookback"] != lookback:
         raise ValueError("model lookback does not match the primary backtest")
@@ -155,19 +167,31 @@ def _explain_ridge_trades(run: dict, model: SavedRidgeModel, dataset_path: Path)
         window = dataset.candles[end - lookback:end]
         if any(candle.available_at > at for candle in window):
             raise ValueError("trade decision window contains unavailable candles")
+        calendar = dataset.config.calendar
+        if isinstance(calendar, SessionCalendar):
+            session = calendar.session_at(window[0].open_time)
+            if session is None or at + model.interval * model.config.horizon_bars >= session.close_time:
+                raise ValueError("trade entry is not eligible for a same-session timed exit")
         values = candle_features(window)
         forecast = model.model.predict(values)
         if Decimal(str(forecast)) <= threshold:
-            raise ValueError("reconstructed Ridge forecast does not exceed the trade's entry threshold")
-        inputs = [{"name": "intercept", "value": None, "contribution": model.model.intercept}]
-        inputs.extend(
-            {"name": name, "value": str(value), "contribution": contribution}
-            for name, value, contribution in zip(
-                FEATURE_NAMES, values, model.model.contributions(values), strict=True,
+            raise ValueError("reconstructed model forecast does not exceed the trade's entry threshold")
+        nonlinear = not isinstance(model, SavedRidgeModel)
+        if nonlinear:
+            inputs = [{"name": name, "value": str(value)}
+                      for name, value in zip(FEATURE_NAMES, values, strict=True)]
+        else:
+            inputs = [{"name": "intercept", "value": None, "contribution": model.model.intercept}]
+            inputs.extend(
+                {"name": name, "value": str(value), "contribution": contribution}
+                for name, value, contribution in zip(
+                    FEATURE_NAMES, values, model.model.contributions(values), strict=True,
+                )
             )
-        )
         trade["prediction"] = {
             "at": at.isoformat(), "forecast": forecast, "threshold": float(threshold), "inputs": inputs,
+            "model_kind": "mlp" if nonlinear else "ridge",
+            "attribution": "nonlinear_no_additive_attribution" if nonlinear else "linear_additive",
         }
 
 
@@ -192,13 +216,13 @@ def _render_report(backtest: Path, *, compare: Path | None, evaluation: Path | N
             runs.append(_run_summary(comparison))
         times = _account_times(primary, comparison)
         model_id = runs[0]["strategy"].get("model_report_id")
-        saved_model = load_ridge_model(model) if model is not None else None
+        saved_model = load_frozen_model(model) if model is not None else None
         if saved_model is not None and saved_model.report_id != model_id:
             raise ValueError("model does not match the primary backtest")
         if dataset is not None:
             if saved_model is None:
                 raise ValueError("--dataset requires --model")
-            _explain_ridge_trades(runs[0], saved_model, dataset)
+            _explain_model_trades(runs[0], saved_model, dataset)
         forecast = _forecast_summary(evaluation, model, training_data, model_id)
     template = Path(__file__).with_name("report_template.html.in").read_text(encoding="utf-8")
     data = json_bytes({"times": times, "runs": runs, "forecast": forecast}).decode("utf-8")

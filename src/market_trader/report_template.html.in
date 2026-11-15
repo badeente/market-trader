@@ -119,7 +119,7 @@
   const bp = value => (value * 10000).toFixed(2) + " bp";
   const dateLabel = value => value ? value.replace("T", " ").replace(/(?:\+00:00|Z)$/, " UTC") : "—";
   const day = value => dayFormat.format(new Date(value));
-  const names = {single_long: "Single long", sma_crossover: "SMA crossover", ridge_long: "Ridge", two_legged_pullback: "Two-legged pullback"};
+  const names = {single_long: "Single long", sma_crossover: "SMA crossover", ridge_long: "Ridge", mlp_long: "MLP", two_legged_pullback: "Two-legged pullback"};
   const labels = data.runs.map((run, index) => {
     const name = Object.hasOwn(names, run.name) ? names[run.name] : run.name;
     return data.runs[1]?.name === data.runs[0].name ? name + " · " + (index + 1) : name;
@@ -276,15 +276,22 @@
   function forecastDetail(prediction) {
     const block = element("div", undefined, "prediction");
     const list = element("dl");
-    block.append(element("h3", "Ridge entry signal"), list);
+    block.append(element("h3", prediction.model_kind === "mlp" ? "MLP entry signal" : "Ridge entry signal"), list);
     metric(list, "Predicted return", bp(prediction.forecast));
     metric(list, "Entry threshold", bp(prediction.threshold));
     const inputs = element("div", undefined, "inputs");
-    const extent = Math.max(...prediction.inputs.map(input => Math.abs(input.contribution)), Number.EPSILON);
+    const nonlinear = prediction.attribution === "nonlinear_no_additive_attribution";
+    const extent = nonlinear ? 1 : Math.max(...prediction.inputs.map(input => Math.abs(input.contribution)), Number.EPSILON);
     const featureLabels = {intercept: "Model intercept", return_1: "Last candle return",
       window_return: "Full window return", range_fraction: "Latest high–low range", close_vs_mean: "Close vs. window mean"};
     for (const input of prediction.inputs) {
       const row = element("div", undefined, "input-row");
+      if (nonlinear) {
+        row.append(element("span", featureLabels[input.name] ?? input.name),
+          element("span", percent(Number(input.value))));
+        inputs.append(row);
+        continue;
+      }
       const track = element("span", undefined, "track");
       const bar = element("i", undefined, input.contribution < 0 ? "negative" : "");
       const size = 50 * Math.abs(input.contribution) / extent;
@@ -297,7 +304,8 @@
         track, element("span", bp(input.contribution)));
       inputs.append(row);
     }
-    block.append(element("p", "Input value and contribution to the forecast", "muted"), inputs);
+    block.append(element("p", nonlinear ? "Nonlinear model: no additive feature attribution" :
+      "Input value and contribution to the forecast", "muted"), inputs);
     return block;
   }
 
@@ -324,8 +332,8 @@
     detail.append(summary, fills);
     if (trade.prediction) {
       fills.append(forecastDetail(trade.prediction));
-    } else if (run.name === "ridge_long") {
-      detail.append(element("p", "Trade forecasts require the saved Ridge model and the backtest dataset.", "muted"));
+    } else if (run.name === "ridge_long" || run.name === "mlp_long") {
+      detail.append(element("p", "Trade forecasts require the saved model and the backtest dataset.", "muted"));
     }
   }
 
