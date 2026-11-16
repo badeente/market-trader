@@ -479,3 +479,40 @@ alten Registries/Live-Reports verändern. Wiederholungen brauchen frische Beleg-
 und Ausgabepfade sowie ein neu freigegebenes tatsächliches Trainingsbudget.
 Der installierte Wheel-Kontext wird außerhalb des Checkouts geprüft; echte
 Modell-/Prognosegleichheit von abweichenden Git-/Lock-Metadaten unterscheiden.
+
+## AP6: kausale Chartbilder und getrennte Auditvorschau
+
+Vertrag: [AP6_IMAGE_DATA.md](AP6_IMAGE_DATA.md); tatsächliche Abnahmen und
+Reviewstatus: [AP6_RESULTS.md](AP6_RESULTS.md). AP6 trainiert kein Bildmodell.
+
+```sh
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q \
+  tests/test_chart_images.py tests/test_image_dataset.py tests/test_image_publication.py \
+  tests/test_image_gallery.py tests/test_image_gallery_capture.py tests/test_images_cli.py
+```
+
+Ausgeführter Abschlussstand: **152 Bildtests**, vollständige Suite **1.295 bestanden**
+mit Torch; **1.287 bestanden / 8 Training-Skips** ohne Torch. Vollsuiten mit engen
+Subprozess-Walllimits nicht gleichzeitig ausführen; ein Parallel-Lastfehler und
+seine unverändert erfolgreichen isolierten/Vollsuiten-Nachläufe sind dokumentiert.
+
+Die synthetischen Tests prüfen PNG-Chunks/CRC/DEFLATE und echte Pixel, kausale
+Fenster, getrennte Zukunfts-/Labeldaten, Ressourcen- und Sessiongrenzen,
+Original-Zielarithmetik und widerspruchsfreie mehrfach auftauchende Kerzen.
+Dateisystemtests verwenden echte `renameat2`-Aufrufe mit gezielten Einfügungen:
+private Staging-Container, vertauschte äußere Namen, ersetzte Vorfahren vor/nach
+Publikation, konkurrierende leere Verzeichnisse/Dateien/Symlinks, kein Überschreiben
+oder Löschen fremder Ziele. Private Staging- und Cache-Pins benötigen Linux.
+
+Die eigenständige Vorschau muss dieselben verifizierten Dateibytes erfassen,
+PNG-Base64 rückwärts bytegleich liefern, Metadaten escapen, Änderungen während
+Capture/Rendering abweisen und auch über `..` außerhalb des Bundles bleiben.
+Sie enthält menschliche Audit-Zielwerte; das HTML ist kein Modellinput.
+
+Echte Abnahme separat außerhalb Git/Reports: 32 Trainings- und 32
+Validierungsbilder, wiederholter kalter/warmer Export, alle 68 Dateien bytegleich.
+Ein nicht-editierbar installiertes Wheel ohne Torch/NumPy erzeugt dieselben
+Artefakte und dieselbe Vorschau. Chromium dekodiert alle 64 PNGs pixelgleich zum
+unabhängigen Decoder; Desktop/390px/320px und Tastatur-/Detailansichten sind
+separat geprüft. Dieser begrenzte Audit-Satz ersetzt keinen vollständigen
+AP7-Trainingsdatensatz und erteilt keine Trainings-/Veröffentlichungsfreigabe.

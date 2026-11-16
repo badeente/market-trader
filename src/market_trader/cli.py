@@ -442,8 +442,48 @@ def main(argv: list[str] | None = None) -> int:
         elif operation == 'results':
             command.add_argument('--job-id', action='append', required=True)
 
+    images = commands.add_parser('images', help='Build and verify causal AP6 chart-image samples; no model training')
+    images.set_defaults(action='images')
+    image_commands = images.add_subparsers(dest='image_action', required=True)
+    for operation in ('build', 'verify', 'preview'):
+        command = image_commands.add_parser(operation)
+        command.add_argument('--dataset', type=Path, required=True,
+                             help='Saved development dataset JSON for build; verified image bundle directory otherwise')
+        if operation == 'build':
+            command.add_argument('--training-data', type=Path, required=True)
+            command.add_argument('--output', type=Path, required=True)
+            command.add_argument('--cache', type=Path, required=True)
+            command.add_argument('--per-split', type=int, default=16)
+        elif operation == 'preview':
+            command.add_argument('--output', type=Path, required=True, help='New standalone HTML outside the image bundle')
+
     args = parser.parse_args(argv)
     try:
+        if args.action == 'images':
+            try:
+                if args.image_action == 'build':
+                    from market_trader.image_dataset import build_image_dataset
+                    result = build_image_dataset(args.dataset, args.training_data, args.output,
+                                                 cache=args.cache, per_split=args.per_split)
+                elif args.image_action == 'verify':
+                    from market_trader.image_dataset import verify_image_dataset
+                    result = verify_image_dataset(args.dataset)
+                else:
+                    from market_trader.experiment_registry import _check_path
+                    from market_trader.image_gallery import render_image_preview
+                    from market_trader.storage import publish_new_file
+                    output = _check_path(args.output).resolve()
+                    bundle = _check_path(args.dataset).resolve()
+                    if output.is_relative_to(bundle):
+                        raise ValueError('Preview output must be outside the immutable image bundle')
+                    if output.exists() or output.is_symlink():
+                        raise FileExistsError('Preview output already exists')
+                    publish_new_file(output, render_image_preview(bundle))
+                    result = {'output': str(output), 'model_input': False}
+                print(json.dumps(result, sort_keys=True, allow_nan=False))
+                return 0
+            except (OSError, ValueError, ArithmeticError, KeyError, TypeError) as error:
+                raise _CommandError(f'images {args.image_action}: {error}') from error
         if args.action == "experiment":
             from market_trader.experiments import dispatch_experiment
 

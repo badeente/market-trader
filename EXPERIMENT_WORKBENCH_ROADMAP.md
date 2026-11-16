@@ -65,6 +65,8 @@ Aus einem bestehenden Run eine neue Konfiguration ableiten. Lernrate, Modellgrö
 
 ### AP6 — Deterministische Bilddaten aus derselben Historie
 
+**Technisch abgeschlossen, unabhängig abgenommen und intern veröffentlicht am 16. November 2026.** 64 echte Auditbilder, bytegleiches Cache-/Wheel-Replay, 1.295 Tests und Browser-Pixelprüfung sind erfolgreich. Nach den zunächst fehlgeschlagenen Reviews genehmigte Andreas verbindlich private, eigene Ausgabeordner; Rollback-/EMFILE-Bereinigung wurden korrigiert und das Schlussreview ist ohne offene Befunde grün. Die selbstenthaltende AP6-Vorschau ist über die vorhandene Report-Galerie erreichbar. Separate Git-/Website-Freigabe erteilt; Ergebnisse und Grenzen: [AP6_RESULTS.md](AP6_RESULTS.md). Keine automatische AP7-/Trainingsfreigabe.
+
 Chartbilder aus denselben kausalen Fenstern und Zielen erzeugen. Renderer, Ausschnitt, Auflösung, Indikatoren, Achsenskalierung und Cache-Schlüssel versionieren. Zukünftige Kerzen, zukünftige Skalierungsstatistiken und sichtbare Ziel-/Ergebnisbeschriftungen ausschließen. Bilder bei Bedarf zwischenspeichern statt unkontrolliert Rohdaten zu vervielfachen. Echte Plattform-Screenshots sind ein zusätzlicher Daten-/Darstellungsfall; ihre Zeitzuordnung und Abweichung von synthetischen Charts separat prüfen.
 
 **Abnahme:** Für jede Beispielprognose ist das tatsächliche Eingabebild mit historischen Kerzen und Zeitpunkt verknüpft. Tests prüfen Daten-/Cache-Trennung und unzulässige Zukunftsinformationen.
