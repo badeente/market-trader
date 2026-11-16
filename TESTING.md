@@ -408,3 +408,38 @@ alle MLP-/Ridge-/SMA-Trades gegen Quell-Opens und Kosten reconciled.
 Frühes Stoppen wählt den Checkpoint auf 2024; diese Werte sind ausdrücklich
 Entwicklungs-/Selektionsmetriken, keine unabhängigen finalen Testwerte.
 2025 wurde weder zum Training noch zur Modellbewertung verwendet.
+
+## AP4: nur lesender Experimentvergleich im Browser
+
+Der Umfang und die HTTP-/Datenverträge stehen in [AP4_WORKBENCH.md](AP4_WORKBENCH.md),
+der Betrieb einschließlich opt-in Registry-Quellen in [REPORT_VIEWER.md](REPORT_VIEWER.md).
+Die Serving-Umgebung bleibt ohne externe Python-Laufzeitabhängigkeiten; Torch,
+NumPy und Node werden zum Lesen vorhandener Ergebnisse nicht benötigt.
+**Node muss für die ausführbaren Frontend-Vertragstests im Test-PATH verfügbar sein.**
+Die Node-Tests sind keine visuelle Browserprüfung.
+
+```sh
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q \
+  tests/test_workbench_data.py tests/test_workbench_server.py tests/test_workbench_template.py
+/home/hermes/workspace/.venvs/market-trader-ap3/bin/python -m pytest -q
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q
+```
+
+Die neuen synthetischen Tests prüfen Integritätsumschläge und Cache-Invalidierung,
+Quell-/Run-Auswahl, gespeicherte Metriken/Einheiten, echte Konto-zu-Kurven-Abbildung,
+Sampling und Trainingshistorie, Vergleichssignaturen, endliche Zahlen, sichere
+HTTP-Grenzen und die reale Inline-JavaScript-Logik mit einem kleinen Test-DOM.
+Schreibende Tests verwenden ausschließlich temporäre synthetische Registries,
+nicht die akzeptierten AP2-/AP3-Läufe. Neben korrupten Bytes sind auch kohärente
+Versions-/Statuswechsel während eines Vergleichs abzusichern.
+
+Die separate Abnahme nutzt die vorhandenen echten, unveränderten Referenzläufe.
+HTTP-Projektionen werden gegen gespeicherte Summarys, vollständige Kontoverläufe,
+Epochen und HTML-Bytes abgeglichen; alle Registry-Dateien werden vor/nachher
+gehasht. Die private Automatisierung liegt unter `var/market-trader/acceptance/`:
+`exercise_ap4.py` und `ap4_browser.mjs`. Vor Wiederverwendung Ziel-URL und neue
+Belegpfade prüfen, bestehende Belege nicht überschreiben. Der Browserlauf prüft
+Desktop/390px/320px, Filter, Auswahlgrenzen, kompatible/inkompatible Vergleiche,
+Deep Links, Keyboard, Fehlerfälle und ausdrücklich markierte XSS-Text-Fixtures.
+Er verwendet ein separat installiertes Wheel außerhalb des Checkouts; PNGs,
+Konsole und Netzwerk sind eigenständige Nachweise zusätzlich zu pytest.

@@ -1,9 +1,13 @@
 # Local code graph
 
-Graphify 0.9.100 lives in the repository's isolated, Git-ignored
-`.tools/graphify/.venv` environment. This location survives reboots.
-The setup commands below need PyPI access. Code-only extraction, clustering,
-and queries run locally after installation.
+The current Hermes installation is in the isolated environment
+`/home/hermes/workspace/.venvs/graphify`; the former repository-local
+`.tools/graphify/.venv` path is not present after migration. For the rebuild
+and query examples below, use `/home/hermes/workspace/.venvs/graphify/bin/graphify`
+in place of `.tools/graphify/.venv/bin/graphify` on this host.
+
+The optional repository-local installation commands below need PyPI access.
+Code-only extraction, clustering, and queries run locally after installation.
 
 ## Install
 

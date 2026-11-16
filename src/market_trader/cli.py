@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import tomllib
@@ -314,6 +315,23 @@ def _write_html_report(args: argparse.Namespace) -> None:
         raise _CommandError(f"save HTML report {args.output}: {error}") from error
 
 
+def _report_registries(tokens: list[str]) -> dict[str, Path] | None:
+    """Parse exact source mappings; never strip or normalize supplied tokens."""
+    if not tokens:
+        return None
+    registries = {}
+    for token in tokens:
+        alias, separator, value = token.partition("=")
+        if (not separator or re.fullmatch(r"[a-z][a-z0-9_]*", alias) is None
+                or alias in registries or not value or value != value.strip()
+                or any(ord(char) < 32 or ord(char) == 127 for char in value)
+                or not Path(value).is_absolute() or str(Path(value)) != value
+                or any(part in (".", "..") for part in value.split("/"))):
+            raise ValueError("--registry requires unique lowercase alias=/absolute/path without padding or traversal")
+        registries[alias] = Path(value)
+    return registries
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="market-trader")
     commands = parser.add_subparsers(required=True)
@@ -360,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--bind", default="127.0.0.1", help="Explicit private IPv4 address (default: loopback)")
     serve.add_argument("--port", type=int, default=8086)
     serve.add_argument("--allow-network", action="append", default=[], help="Allowed private IPv4 subnet; repeatable")
+    serve.add_argument("--registry", action="append", default=[], metavar="ALIAS=/ABSOLUTE/PATH",
+                       help="Read-only experiment source; repeatable, enables the workbench")
     serve.set_defaults(action="serve-reports")
 
     reference = commands.add_parser("reference", help="Run the frozen AP1 reference protocol; reserve 2025")
@@ -414,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
                 with create_report_server(
                     args.directory, bind=args.bind, port=args.port,
                     allowed_networks=("127.0.0.0/8", *args.allow_network),
+                    registries=_report_registries(args.registry),
                 ) as server:
                     print(f"Report viewer listening on {args.bind}:{server.server_address[1]}", flush=True)
                     server.serve_forever()

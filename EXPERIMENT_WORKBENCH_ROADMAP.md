@@ -41,13 +41,15 @@ Ein konfigurierbarer Ablauf für Daten -> Training -> eingefrorenes Modell -> Vo
 
 ### AP3 — Erstes kleines tabellarisches neuronales Modell, Ende-zu-Ende
 
-**Technisch abgeschlossen.** Das festgelegte MLP4→16→8→1 wurde tatsächlich trainiert, sicher gespeichert/geladen, im bestehenden Ledger bewertet und intern als Vergleich zu Ridge/Null/SMA veröffentlicht. Reales Replay,891Tests,885/6ohneTorch und unabhängige Reviews: [AP3_RESULTS.md](AP3_RESULTS.md). Negative Leistung ist dokumentiert;2025 bleibt reserviert. AP4 ist das nächste vorgeschlagene Paket, nicht automatisch freigegeben.
+**Technisch abgeschlossen.** Das festgelegte MLP4→16→8→1 wurde tatsächlich trainiert, sicher gespeichert/geladen, im bestehenden Ledger bewertet und intern als Vergleich zu Ridge/Null/SMA veröffentlicht. Reales Replay,891Tests,885/6ohneTorch und unabhängige Reviews: [AP3_RESULTS.md](AP3_RESULTS.md). Negative Leistung ist dokumentiert;2025 bleibt reserviert. AP4 wurde anschließend ausdrücklich zur Umsetzung freigegeben.
 
 Separates, festgelegtes Trainingsenvironment erproben, das den vorhandenen Backtest nicht destabilisiert. Zunächst dieselben Merkmale, Zieldefinitionen und Zeitgrenzen wie die Ridge-Referenz verwenden. Kleines neuronales Modell trainieren, Training/Validierung protokollieren, Gewichte und Vorverarbeitung speichern, zeitgestempelte Vorhersagen exportieren und im vorhandenen Backtester bewerten.
 
 **Abnahme:** Ein kleiner Trainingslauf ist wirklich ausführbar; Reload-Inferenz funktioniert; Bericht vergleicht NN, Ridge und Nullvorhersage unter gleichen Bedingungen. Der Meilenstein ist eine funktionierende Trainingskette, nicht ein versprochener Renditevorteil. Zunächst begrenzter Smoke-Test statt langer GPU-Jobs.
 
 ### AP4 — Webseite als Modell- und Experimentvergleich
+
+**Technisch abgeschlossen und intern veröffentlicht.** Reale/wheelbasierte Browser- und Datenabnahme, 1.028 Tests sowie unabhängige Schlussreviews: [AP4_RESULTS.md](AP4_RESULTS.md). Scope und Schnittstellen: [AP4_WORKBENCH.md](AP4_WORKBENCH.md). Separate Freigabe für Git und Veröffentlichung am 16. November 2026 erteilt; Live-HTTP, zweiter LAN-Rechner und Desktop-/Handy-Browser geprüft. Keine automatische Freigabe für AP5.
 
 Die HTML-Galerie um strukturierte Run-Ansichten erweitern: Datensatz/Zeitraum, Modell, Parameter, Laufstatus und Detailbericht. Mehrere kompatible Runs auswählen, Konfigurationsunterschiede hervorheben, Trainingskurven und Vorhersagegüte separat von Equity, Drawdown, Kosten und Tradeanzahl darstellen. Zunächst lesend; keine beliebigen Shell-Kommandos oder Pfade aus dem Browser.
 
@@ -89,9 +91,11 @@ Der erste nutzbare vertikale Durchstich ist AP1 -> AP2 -> AP3 -> AP4. Danach ist
 - Umsetzung lokal mit Tests zuerst, Gesamttests, kurzem unabhängigem Review und nachvollziehbaren Artefakten. Lokale Arbeit, Commit, Push und Deployment haben getrennte Freigaben.
 - Lange Trainingsläufe als dauerhafte Jobs mit Logs, Status, Stop und Ressourcenlimits ausführen, nicht an eine offene Chat- oder Subagent-Sitzung binden. Nur freigegebene Laufzeit/Kosten verbrauchen.
 - Benötigte Voraussetzungen: ein zugänglicher Datenordner, Metadaten/Beispieldatei, erster Markt/Zeithorizont, Hardware-/Speicher-/Trainingsbudget und Rückmeldung anhand konkreter Berichte. Administrative Installationen bei tatsächlichem Bedarf; kein pauschaler Root-Zugriff erforderlich.
-- Aktueller Komfort-Blocker: automatisierte Browserprüfung scheitert an fehlender libatk-1.0.so.0. Gezielte Browser-Abhängigkeiten durch einen Administrator könnten visuelle UI-Prüfung erleichtern; das ist keine Voraussetzung für Training oder HTTP-Hosting.
+- Die frühere Browserblockade durch fehlende libatk-1.0.so.0 wurde für die AP4-QA ohne sudo gelöst: separat entpackte Bibliotheken und isoliertes Chromium/CDP ermöglichen echte Desktop-/Handy-Screenshots und Bedienabläufe. Die Serving-Umgebung benötigt weiterhin keinen Browser und kein Trainingsframework.
 
-## Historische Daten: tatsächlich geprüfter Bestand
+## Historische Ausgangsinventur vor AP1
+
+Die folgende Inventur beschreibt den damaligen Checkout und die unbekannten alten GER30-Daten. Die später beschaffte, separat geprüfte Dukascopy-Referenz liegt außerhalb Git; die maßgeblichen Nachweise sind [AP1_RESULTS.md](AP1_RESULTS.md), [AP2_RESULTS.md](AP2_RESULTS.md) und [AP3_RESULTS.md](AP3_RESULTS.md).
 
 Im aktuellen Checkout gefunden: drei versionierte synthetische CSV-Fixtures unter tests/fixtures. Kein datasets/-Verzeichnis, keine echten historischen CSV-/Parquet-Datensätze und keine gespeicherten Modellgewichte in den geprüften Dateiformaten. Die Regeln ignorieren *.csv mit Ausnahme der Test-Fixtures sowie /datasets/.
 

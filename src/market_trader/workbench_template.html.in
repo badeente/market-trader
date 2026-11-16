@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'">
+<title>Experiment Workbench · Market Trader</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2329213c'/%3E%3Cpath d='M16 5 27 16 16 27 5 16Z' fill='none' stroke='%23b9a1ff' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:dark;--bg:#0c0e14;--panel:#13161f;--line:#282c3a;--text:#e7eaf2;--muted:#a4adc0;--violet:#b9a1ff;--emerald:#6ee7bd;--red:#ff8991;--amber:#ffd18a;font:14px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}a{color:var(--violet);text-underline-offset:3px}button,input,select{font:inherit}button,input,select{background:#1b1e2a;border:1px solid #43495e;border-radius:7px;color:var(--text);padding:9px 12px}button,a,input,select{touch-action:manipulation}button{cursor:pointer}button:hover:not(:disabled){border-color:var(--violet);background:#29243c}button:disabled{opacity:.5;cursor:not-allowed}:focus-visible{outline:2px solid var(--emerald);outline-offset:4px}button.primary{background:#6950a7;border-color:#9478d6;font-weight:650}.skip{position:absolute;left:12px;top:-80px;background:var(--panel);padding:12px;z-index:9}.skip:focus{top:12px}.topbar{border-bottom:1px solid var(--line);padding:16px 28px;display:flex;align-items:center;gap:28px;flex-wrap:wrap}.brand{font-weight:700;letter-spacing:.02em}.mark{display:inline-grid;place-items:center;width:28px;height:28px;background:#29213c;color:var(--violet);border-radius:7px;margin-right:9px}nav{display:flex;gap:22px}nav a{text-decoration:none;color:var(--muted)}nav a:first-child{color:var(--text)}.readonly{margin-left:auto;color:var(--emerald);font-size:12px}.layout{max-width:1536px;margin:auto;padding:32px 28px 60px;min-width:0}h1,h2,h3,p{margin:0 0 12px}h1{font-size:28px;letter-spacing:-.035em}h2{font-size:19px;letter-spacing:-.02em}h3{font-size:15px}.eyebrow{color:var(--violet);letter-spacing:.12em;text-transform:uppercase;font-size:11px;font-weight:700;margin-bottom:8px}.subtitle,.muted{color:var(--muted)}.disclaimer{border:1px solid #494037;border-left:3px solid var(--amber);border-radius:7px;padding:12px 16px;margin:24px 0;color:#dbc9b0;background:#1a1716;font-size:13px}.toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:24px 0 16px}.field{display:grid;gap:5px;min-width:0;flex:1 1 150px}.field.search{flex:3 1 240px}label{font-size:12px;color:var(--muted)}input,select{width:100%;min-width:0}input[type=checkbox]{width:19px;height:19px;accent-color:var(--violet);flex-shrink:0}.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin:16px 0;min-width:0}.selection{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;border:1px solid var(--line);border-radius:9px;background:#151322}.selection p{margin:0;flex:1 1 220px}.selected-keys{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.chip{font:12px ui-monospace,monospace;border:1px solid var(--line);border-radius:5px;padding:4px 8px;color:var(--muted);overflow-wrap:anywhere;max-width:100%}.run-card{display:grid;grid-template-columns:25px minmax(0,1fr) auto;gap:14px;border-bottom:1px solid var(--line);padding:20px 0;min-width:0}.run-card:last-child{border:0}.run-card h3{margin:0}.run-title{border:0;padding:0;background:none;text-align:left;font-size:16px;color:var(--text);font-weight:650;overflow-wrap:anywhere}.run-meta,.run-ids{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--muted);margin:8px 0;overflow-wrap:anywhere}.run-ids{font-family:ui-monospace,monospace}.run-metrics{display:flex;gap:26px;flex-wrap:wrap;margin-top:14px}.metric-label{display:block;color:var(--muted);font-size:11px}.metric-value{font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}.positive{color:var(--emerald)}.negative{color:var(--red)!important}.badge{font-size:11px;border:1px solid #3b4353;border-radius:5px;padding:3px 7px;align-self:start;color:var(--muted)}.badge.completed{color:var(--emerald);border-color:#285346}.badge.failed,.badge.invalid{color:var(--red);border-color:#683e46}.notice{border:1px solid #6a4b35;background:#241c16;color:var(--amber);padding:14px;border-radius:8px;margin:14px 0;overflow-wrap:anywhere}.error{color:var(--red);border-color:#72404c;background:#24181e}.view-heading{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:28px}.view-heading h2{flex:1;overflow-wrap:anywhere}.table-scroll{overflow-x:auto;max-width:100%;border:1px solid var(--line);border-radius:7px;margin:12px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere;min-width:100px;font-variant-numeric:tabular-nums}th{color:var(--muted);font-weight:500;background:#181b26}tr:last-child td{border:0}td:first-child{color:var(--muted)}.chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.chart-panel{min-width:0;margin:0}.chart{width:100%;height:auto;display:block;margin:10px 0}.chart text{fill:var(--muted);font:11px system-ui,sans-serif}.chart .grid{stroke:#303546;stroke-width:1}.legend{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:12px}.legend span:before{content:"";display:inline-block;width:15px;height:3px;background:var(--series-color);margin-right:6px;vertical-align:middle}.stats{display:flex;gap:20px;flex-wrap:wrap}.stats>div{flex:1 1 130px}.loading{color:var(--violet)}#page-status{margin:14px 0;min-height:22px}#error-box:empty{display:none}[hidden]{display:none!important}footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.wrap{overflow-wrap:anywhere}details summary{cursor:pointer;color:var(--violet)}
+.legend span{overflow-wrap:anywhere;min-width:0;max-width:100%}
+@media(min-width:1400px){.layout{padding-left:52px;padding-right:52px}}
+@media(max-width:650px){.topbar{padding:14px 16px;gap:14px}.readonly{margin-left:0}nav{gap:16px}.layout{padding:24px 16px 40px}h1{font-size:25px}.panel{padding:14px}.chart-grid{grid-template-columns:minmax(0,1fr)}.run-card{grid-template-columns:23px minmax(0,1fr);gap:10px}.run-card>.badge{grid-column:2;grid-row:2}.run-metrics{gap:12px 22px}.metric-value{font-size:16px}.selection button{flex:1 1 120px}.toolbar{gap:10px}.field{flex-basis:calc(50% - 10px)}.field.search{flex-basis:100%}th,td{padding:9px;min-width:105px}}
+</style>
+</head>
+<body>
+<a href="#main" class="skip">Zum Inhalt</a>
+<header class="topbar"><div class="brand"><span class="mark" aria-hidden="true">◈</span>Market Trader <span class="muted">/ Research</span></div><nav aria-label="Hauptnavigation"><a href="/experiments" id="overview-link">Übersicht</a><a href="/reports">Reportarchiv ↗</a></nav><span class="readonly">● Nur lesend · intern</span></header>
+<main id="main" class="layout">
+<div class="eyebrow">AP4 / Experiment Workbench</div><h1>Experimente nachvollziehen.</h1><p class="subtitle">Konfigurationen, Validierung und Kosten im gemeinsamen Forschungskontext.</p>
+<div class="disclaimer"><strong>2025 bleibt reserviert.</strong> Validierung 2024 ist Entwicklungs-/Selektionsdatenbasis, nicht final und kein unabhängiger Abschlusstest. Historische Forschung, keine Handelsempfehlung oder Gewinnzusage. Punkte je fester Einheit sind keine EUR.</div>
+<div id="page-status" role="status" aria-live="polite" aria-atomic="true">Übersicht wird geladen …</div><div id="error-box" role="alert"></div>
+<section id="overview-view" aria-labelledby="overview-heading"><h2 id="overview-heading">Run-Übersicht</h2>
+<div class="toolbar"><div class="field search"><label for="search">Suche · Name, ID, Hypothese</label><input id="search" type="search" placeholder="Runs durchsuchen …" autocomplete="off"></div><div class="field"><label for="model-filter">Modell</label><select id="model-filter"><option value="">Alle Modelle</option></select></div><div class="field"><label for="status-filter">Status</label><select id="status-filter"><option value="">Alle Status</option></select></div><div class="field"><label for="source-filter">Quelle</label><select id="source-filter"><option value="">Alle Quellen</option></select></div><button id="refresh-button" type="button">Aktualisieren</button></div>
+<div class="selection"><p id="selection-summary">0 von 4 Runs ausgewählt · mindestens 2</p><button id="clear-selection" type="button" disabled>Auswahl leeren</button><button id="compare-button" class="primary" type="button" disabled>Runs vergleichen</button></div><div id="selected-keys" class="selected-keys" aria-label="Ausgewählte Runs"></div>
+<div id="run-list" class="panel" aria-label="Experiment-Runs" aria-busy="true"></div></section>
+<section id="detail-view" hidden aria-label="Run-Details" tabindex="-1"></section><section id="compare-view" hidden aria-label="Run-Vergleich" tabindex="-1"></section>
+<footer>Read-only Research Workbench · Prognosefehler (bp), standardisierte MSE und Handelsergebnis (Punkte) sind unterschiedliche Größen. Kein automatisches Modellranking.</footer>
+<noscript><p class="notice">JavaScript ist erforderlich, um die internen, nur lesenden Daten-APIs abzurufen. Das <a href="/reports">Reportarchiv</a> bleibt verfügbar.</p></noscript>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const palette = ['#6ee7bd','#b9a1ff','#ffc77d','#79bcff'];
+function el(tag, text, cls) {
+  const node = document.createElement(tag);
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  if (cls) node.className = cls;
+  return node;
+}
+function finite(value) {
+  return value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(value));
+}
+function number(value, unit = '', digits = 3) {
+  if (!finite(value)) return '—';
+  return new Intl.NumberFormat('de-DE', {maximumFractionDigits:digits}).format(Number(value)) + (unit ? ' ' + unit : '');
+}
+function numeric(value, unit = '', digits = 3) {
+  return el('span',number(value,unit,digits),finite(value) && Number(value)<0 ? 'negative' : '');
+}
+function text(value) { return value === null || value === undefined || value === '' ? '—' : String(value); }
+function safeReportURL(value, key) {
+  if (typeof value !== 'string' || !value.startsWith('/experiment-report?')) return null;
+  try {
+    const u = new URL(value,location.origin);
+    if (u.origin !== location.origin || u.pathname !== '/experiment-report' || u.hash ||
+        u.searchParams.getAll('run').length !== 1 || [...u.searchParams.keys()].some(k=>k!=='run') || u.searchParams.get('run') !== key) return null;
+    return u.pathname + u.search;
+  } catch { return null; }
+}
+function flatten(value, prefix = '') {
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value);
+    return entries.length ? entries.flatMap(([k,v])=>flatten(v,prefix ? prefix+'.'+k : k)) : [[prefix,'—']];
+  }
+  return [[prefix,value]];
+}
+function table(headers, rows) {
+  const wrap=el('div',null,'table-scroll'); wrap.tabIndex=0;
+  wrap.setAttribute('aria-label',headers.join(' / '));
+  const t=el('table'), head=el('thead'), tr=el('tr'), body=el('tbody');
+  headers.forEach(h=>{const th=el('th',h);th.setAttribute('scope','col');tr.append(th);}); head.append(tr);
+  rows.forEach(row=>{const r=el('tr');row.forEach(v=>{const cell=el('td');if(v && typeof v==='object' && v.tagName) cell.append(v);else cell.textContent=text(v);r.append(cell);});body.append(r);});
+  t.append(head,body);wrap.append(t);return wrap;
+}
+function svgNode(tag, attrs, content) {
+  const n=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));
+  if(content!==undefined) n.textContent=String(content);
+  return n;
+}
+function chart(title, series, unit, xLabel) {
+  const panel=el('section',null,'panel chart-panel');panel.append(el('h3',title));
+  const values=series.flatMap(s=>s.points.filter(p=>finite(p[1])).map(p=>Number(p[1])));
+  if (!values.length) {panel.append(el('p','Keine Kurvendaten vorhanden.','muted'));return panel;}
+  const width=typeof window.innerWidth==='number'&&window.innerWidth<=650?Math.max(260,window.innerWidth-100):640;
+  const right=width-20;
+  const svg=svgNode('svg',{viewBox:'0 0 '+width+' 240',role:'img','aria-label':title+' · '+unit+' · '+xLabel,class:'chart'});
+  svg.append(svgNode('title',{},title+' — '+unit));
+  let min=Math.min(...values),max=Math.max(...values);if(min===max){min-=1;max+=1;}
+  const y=v=>195-(v-min)/(max-min)*155;
+  const labels=[...new Set(series.flatMap(s=>s.points.map(p=>p[0])))];
+  const known=labels.filter(v=>v!==null&&v!==undefined);
+  const numericAxis=known.length>0&&known.every(v=>finite(v));
+  const dateAxis=!numericAxis&&known.length>0&&known.every(v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}/.test(v)&&Number.isFinite(Date.parse(v)));
+  const coordinate=value=>numericAxis?Number(value):dateAxis?Date.parse(value):labels.indexOf(value);
+  const coordinates=known.map(coordinate),xMin=coordinates.length?Math.min(...coordinates):0,xMax=coordinates.length?Math.max(...coordinates):1;
+  const x=value=>value===null||value===undefined?76:76+(coordinate(value)-xMin)/Math.max(1,xMax-xMin)*(right-76);
+  [min,(min+max)/2,max].forEach(v=>{svg.append(svgNode('line',{x1:76,y1:y(v),x2:right,y2:y(v),class:'grid'}));svg.append(svgNode('text',{x:68,y:y(v)+4,'text-anchor':'end'},number(v,'',4)));});
+  series.forEach(s=>{
+    let d='',open=false;
+    s.points.forEach(p=>{if(!finite(p[1])){open=false;return;} d+=(open?' L':' M')+x(p[0]).toFixed(2)+' '+y(Number(p[1])).toFixed(2);open=true;});
+    if(d) svg.append(svgNode('path',{d,stroke:s.color,'stroke-width':2,fill:'none','stroke-linecap':'round'}));
+    const actual=s.points.filter(p=>finite(p[1]));
+    if(actual.length===1) svg.append(svgNode('circle',{cx:x(actual[0][0]),cy:y(Number(actual[0][1])),r:3,fill:s.color}));
+  });
+  svg.append(svgNode('text',{x:76,y:18},unit));svg.append(svgNode('text',{x:right,y:232,'text-anchor':'end'},xLabel));
+  const legend=el('div',null,'legend');
+  series.forEach(s=>{const item=el('span',s.name);item.style.setProperty('--series-color',s.color);legend.append(item);});
+  panel.append(svg,legend);
+  series.forEach(s=>{
+    if(s.points.length) panel.append(el('p',s.name+' · '+text(s.points[0][0])+' → '+text(s.points[s.points.length-1][0]),'muted wrap'));
+  });
+  return panel;
+}
+
+const state={runs:[],selected:new Set(),routeSerial:0,overviewSerial:0,overviewWarnings:[],overviewError:null};
+function announce(message) { $('page-status').textContent=message; }
+function selectable(run) { return run.status==='completed' && run.selectable===true; }
+function filteredRuns() {
+  const query=$('search').value.trim().toLocaleLowerCase('de');
+  return state.runs.filter(r=>(!$('model-filter').value||r.model_kind===$('model-filter').value) &&
+    (!$('status-filter').value||r.status===$('status-filter').value) &&
+    (!$('source-filter').value||r.source===$('source-filter').value) &&
+    (!query||[r.key,r.run_id,r.name,r.hypothesis,r.model_kind,r.source,r.parent_id,r.created_at,r.dataset_id,r.validation_dataset_id].filter(v=>v!=null).join(' ').toLocaleLowerCase('de').includes(query)));
+}
+function updateSelection() {
+  const visible=new Set(filteredRuns().map(r=>r.key));
+  const hidden=[...state.selected].filter(k=>!visible.has(k)).length;
+  $('selection-summary').textContent=state.selected.size+' von 4 Runs ausgewählt · mindestens 2'+(hidden?' · '+hidden+' ausgeblendet':'');
+  $('compare-button').disabled=state.selected.size<2||state.selected.size>4;
+  $('clear-selection').disabled=state.selected.size===0;
+  $('selected-keys').replaceChildren();
+  state.selected.forEach(key=>{
+    const remove=el('button',key+(visible.has(key)?'':' · ausgeblendet')+' ×','chip');
+    remove.type='button';remove.setAttribute('aria-label','Auswahl entfernen: '+key);
+    remove.addEventListener('click',()=>toggleSelection(key,false));$('selected-keys').append(remove);
+  });
+}
+function toggleSelection(key,checked) {
+  if(checked) {
+    const run=state.runs.find(r=>r.key===key);
+    if(!run||!selectable(run)) return false;
+    if(!state.selected.has(key)&&state.selected.size>=4) {announce('Maximal 4 abgeschlossene, gültige Runs auswählen.');renderRuns();return false;}
+    state.selected.add(key);
+  } else state.selected.delete(key);
+  renderRuns(key);return true;
+}
+function clearSelection() {state.selected.clear();renderRuns();announce('Auswahl geleert.');}
+function runMetric(label,value,unit,digits=3) {
+  const box=el('div');box.append(el('span',label,'metric-label'));
+  const v=numeric(value,unit,digits);v.className+=' metric-value';box.append(v);return box;
+}
+function renderRuns(focusKey) {
+  const list=$('run-list');list.replaceChildren();const rows=filteredRuns();
+  if(!rows.length) list.append(el('p',state.runs.length?'Keine Runs für diese Filter. Filter ändern, um weitere Runs zu sehen.':'Keine Runs vorhanden. Es werden keine Beispieldaten erzeugt.','muted'));
+  rows.forEach(r=>{
+    const card=el('article',null,'run-card');card.dataset.runKey=r.key;
+    const check=el('input');check.type='checkbox';check.dataset.runKey=r.key;
+    check.checked=state.selected.has(r.key);check.disabled=!selectable(r)||(!check.checked&&state.selected.size>=4);
+    check.setAttribute('aria-label','Run zum Vergleich auswählen: '+text(r.name)+' · '+r.key);
+    if(!selectable(r)) check.title='Nur abgeschlossene, integritätsgeprüfte Runs sind vergleichbar.';
+    check.addEventListener('change',()=>toggleSelection(r.key,check.checked));
+    const body=el('div');const title=el('button',text(r.name),'run-title');title.type='button';title.dataset.runKey=r.key;
+    title.setAttribute('aria-label','Details öffnen: '+r.key);title.addEventListener('click',()=>navigate('run',[r.key]));
+    const h=el('h3');h.append(title);body.append(h,el('p',text(r.hypothesis),'muted wrap'));
+    const meta=el('div',null,'run-meta');
+    [r.source,text(r.model_kind).toUpperCase(),'Erstellt: '+text(r.created_at)].forEach(v=>meta.append(el('span',text(v))));
+    const ids=el('div',null,'run-ids');ids.append(el('span',r.key),el('span','Parent: '+text(r.parent_id)));
+    body.append(meta,ids);
+    const period=r.period||{};
+    if(r.dataset_id||period.validation_start||period.validation_end) body.append(el('p',
+      'Validierung: '+text(period.validation_start).slice(0,10)+' → '+text(period.validation_end).slice(0,10)+' · Datensatz: '+text(r.dataset_id),'muted wrap'));
+    const metrics=el('div',null,'run-metrics'),m=r.metrics||{};
+    metrics.append(runMetric('Primär · MAE',m.mae_bp,'bp',4),runMetric('Primär · RMSE',m.rmse_bp,'bp',4),runMetric('Netto je Einheit',m.net_points,'Punkte'),runMetric('Training',r.training_rows,'Zeilen'),runMetric('Validierung',r.validation_rows,'Zeilen'));
+    body.append(metrics);const badge=el('span',text(r.status),'badge '+(['completed','failed','invalid'].includes(r.status)?r.status:''));
+    card.append(check,body,badge);list.append(card);
+    if(focusKey===r.key&&!check.disabled)check.focus();
+  });
+  list.setAttribute('aria-busy','false');updateSelection();
+}
+
+function section(title, cls='panel') {const n=el('section',null,cls);n.append(el('h3',title));return n;}
+function warnings(root, items) {(items||[]).forEach(w=>root.append(el('p',w,'notice')));}
+function viewHeading(root,title) {
+  const h=el('div',null,'view-heading'),back=el('button','← Zur Übersicht');back.type='button';
+  const refresh=el('button','Aktualisieren');refresh.type='button';refresh.addEventListener('click',refreshAll);
+  back.addEventListener('click',()=>navigate('overview'));h.append(back,el('h2',title),refresh);root.append(h);
+}
+function settings(title,value) {
+  const s=el('details',null,'panel');s.append(el('summary',title),table(['Feld / Parameter','Gespeicherter Wert'],flatten(value||{})));return s;
+}
+function metricsPanel(d) {
+  const s=section('Prognosefehler · Validierung 2024');
+  s.append(el('p','Primärmodell: '+text(d.run.model_kind)+' · Baselines separat. 1 bp = 0,0001 Rendite. Keine Abschlusstest-Metriken.','muted'));
+  s.append(el('p','MAE: mittlerer absoluter Prognosefehler. RMSE gewichtet große Fehler stärker. Kleinere Fehler sind besser; sie belegen keinen Handelsgewinn.','muted'));
+  const entries=Object.entries(d.metrics_by_model||{});
+  if(entries.length) s.append(table(['Modell','MAE (bp)','RMSE (bp)'],entries.map(([k,m])=>[k+(k===d.run.model_kind?' · Primär':''),numeric(m.mae_bp,'bp',4),numeric(m.rmse_bp,'bp',4)])));
+  else s.append(el('p','Keine geprüften Prognosemetriken vorhanden.','muted'));
+  return s;
+}
+function tradingPanel(d) {
+  const s=section('Handelsergebnis · Punkte je fester Einheit');
+  s.append(el('p','Hypothetische Ausführungskosten; Punkte sind keine EUR. Referenzwerte sind keine erzielten Gewinne.','muted'));
+  const rows=Object.entries(d.trading_by_model||{}).map(([k,m])=>[k,numeric(m.trade_count,'Trades',0),numeric(m.net_points,'Punkte'),numeric(m.reference_points,'Punkte'),numeric(m.modeled_cost_points??m.cost_points,'Punkte'),numeric(m.max_drawdown_points??m.drawdown_points,'Punkte')]);
+  if(rows.length) s.append(table(['Strategie','Trades','Netto (Punkte)','Referenz (Punkte)','Modellierte Kosten (Punkte)','Max. Drawdown (Punkte)'],rows));
+  else s.append(el('p','Keine geprüften Handelsmetriken vorhanden.','muted'));
+  return s;
+}
+function trainingPanel(d) {
+  const s=section('Training & Auswahl');const t=d.training;
+  if(!t) {s.append(el('p','Keine gespeicherte Trainingshistorie für diesen Run.','muted'));return s;}
+  const history=t.history||[];
+  s.append(table(['Epochen gespeichert','Beste Epoche','Abbruchgrund'],[[history.length,text(t.best_epoch),text(t.stopping_reason)]]));
+  s.append(el('p','Training / Validierung: standardisierte Ziel-MSE, nicht bp, Rendite oder Handelsergebnis. Validierung kann Early Stopping beeinflussen.','muted'));
+  s.append(chart('Verlustverlauf · standardisierte Ziel-MSE',[
+    {name:'Training',color:palette[0],points:history.map(r=>[r.epoch,r.training_mse])},
+    {name:'Validierung',color:palette[1],points:history.map(r=>[r.epoch,r.validation_mse])}],'standardisierte Ziel-MSE','Epoche'));
+  const full=el('details');full.append(el('summary','Gespeicherte Epochen anzeigen'),table(['Epoche','Training MSE','Validierung MSE'],history.map(r=>[r.epoch,numeric(r.training_mse,'',7),numeric(r.validation_mse,'',7)])));s.append(full);return s;
+}
+function curveNotice(d) {
+  const c=d.curves||{};
+  return text(d.run.key)+' · '+(c.sampled?'Kurven heruntergesampelt':'Keine Kurven-Downsampling-Angabe: '+(c.sampled===false?'vollständige Kurven':'—'))+' · '+text(c.source_count)+' Quellpunkte. Metriken aus vollständiger Datenbasis.';
+}
+function curvePanels(details) {
+  const block=section('Kontoverlauf · Validierung 2024');
+  block.append(el('p','Netto relativ zum gespeicherten Startkapital; Drawdown vom bisherigen Höchststand. Primärmodelle, keine Trainingsverluste.','muted'));
+  details.forEach(d=>block.append(el('p',curveNotice(d),'muted wrap')));
+  const grid=el('div',null,'chart-grid');
+  ['equity','drawdown'].forEach(kind=>grid.append(chart(kind==='equity'?'Netto-Equity':'Drawdown',details.map((d,i)=>({name:d.run.key+' · '+text(d.run.model_kind),color:palette[i%palette.length],points:d.curves?.[kind]||[]})),'Punkte je Einheit','Zeit (2024)')));
+  block.append(grid);return block;
+}
+function renderDetail(d) {
+  const root=$('detail-view');root.replaceChildren();const r=d.run;
+  viewHeading(root,text(r.name));root.append(el('p',r.key,'chip'),el('p',text(r.hypothesis),'wrap'));
+  warnings(root,d.warnings);
+  if(d.error) root.append(el('p',d.error,'notice error'));
+  if(!d.error&&r.status==='completed') root.append(metricsPanel(d),tradingPanel(d),trainingPanel(d),curvePanels([d]));
+  else root.append(el('p','Nicht abgeschlossener oder ungültiger Run: keine vergleichbaren Metriken.','notice'));
+  root.append(settings('Run-Identität',{key:r.key,source:r.source,run_id:r.run_id,parent_id:r.parent_id,model_kind:r.model_kind,status:r.status,created_at:r.created_at,training_rows:r.training_rows,validation_rows:r.validation_rows,dataset_id:r.dataset_id,period:r.period}));
+  root.append(settings('Konfiguration & Parameter',d.config),settings('Datenidentitäten & Vergleichsbedingungen',d.signature),settings('Code & Laufzeit',d.runtime));
+  const href=safeReportURL(r.report_url,r.key);
+  if(href&&!d.error&&r.status==='completed') {const link=el('a','Geprüften Detailreport öffnen ↗');link.href=href;root.append(link);}
+}
+function differencesPanel(title,pairs,collapsed=false) {
+  const rows=[];
+  (pairs||[]).forEach(p=>(p.differences||[]).forEach(d=>{
+    // Nested values remain readable parameter rows, not an opaque JSON blob.
+    const left=flatten(d.left),right=flatten(d.right);
+    const paths=new Set([...left,...right].map(v=>v[0]));
+    const l=new Map(left),r=new Map(right);
+    paths.forEach(path=>rows.push([text(p.left)+' ↔ '+text(p.right),text(d.field)+(path?'.'+path:''),text(l.get(path)),text(r.get(path))]));
+  }));
+  const s=collapsed?el('details',null,'panel'):section(title);
+  if(collapsed) {
+    const fields=[...new Set(rows.map(r=>r[1]))].sort((a,b)=>(a==='model.kind'?-1:b==='model.kind'?1:a.localeCompare(b)));
+    s.append(el('summary',title+' · '+fields.length+' Felder'+(fields.length?' · '+fields.slice(0,3).join(', ')+(fields.length>3?' …':''):'')));
+  }
+  s.append(rows.length?table(['Run-Paar','Unterschiedliches Feld','Links','Rechts'],rows):el('p','Keine Unterschiede gemeldet.','muted'));return s;
+}
+function renderCompare(data) {
+  const root=$('compare-view');root.replaceChildren();viewHeading(root,'Runs vergleichen');
+  root.append(el('p','Deskriptiver Forschungsvergleich · keine Rangliste, keine Modell- oder Gewinnempfehlung.','muted'));
+  root.append(el('p',data.compatible?'Bedingungen laut gespeicherter Signatur kompatibel. Validierung bleibt nicht final.':'Nicht kompatibel: Daten, Kohorte, Kosten, Code oder Laufzeit unterscheiden sich. Metriken und Kurven sind kein fairer Leistungsvergleich.',data.compatible?'notice':'notice error'));
+  warnings(root,data.warnings);
+  root.append(differencesPanel('Vergleichsbedingungen · vor Metriken prüfen',data.condition_differences),differencesPanel('Konfigurationsunterschiede',data.parameter_differences,true));
+  const overview=section('Ausgewählte Runs');
+  overview.append(table(['Run / Quelle','Modell','Training (Zeilen)','Validierung (Zeilen)','Primär MAE (bp)','Primär RMSE (bp)','Netto (Punkte)'],data.runs.map(r=>[r.key,text(r.model_kind),numeric(r.training_rows,'',0),numeric(r.validation_rows,'',0),numeric(r.metrics?.mae_bp,'bp',4),numeric(r.metrics?.rmse_bp,'bp',4),numeric(r.metrics?.net_points,'Punkte')])));root.append(overview);
+  const details=data.details||[];root.append(curvePanels(details));
+  details.forEach(d=>{
+    const group=section(d.run.key+' · '+text(d.run.name));const button=el('button','Run-Details öffnen');button.type='button';button.dataset.runKey=d.run.key;button.addEventListener('click',()=>navigate('run',[d.run.key]));group.append(button);
+    warnings(group,d.warnings);group.append(metricsPanel(d),tradingPanel(d),trainingPanel(d));root.append(group);
+  });
+}
+
+function parseRoute(search) {
+  const p=new URLSearchParams(search),names=[...p.keys()];
+  if(!names.length) return {kind:'overview',keys:[]};
+  if(names.length!==1||!['run','compare'].includes(names[0])) throw new Error('Ungültiger Link: run oder compare einmalig angeben.');
+  const kind=names[0],keys=(p.get(kind)||'').split(',');
+  if((kind==='run'&&keys.length!==1)||(kind==='compare'&&(keys.length<2||keys.length>4))||new Set(keys).size!==keys.length||keys.some(k=>!keyValid(k))) throw new Error('Ungültiger Link: 1 Run oder 2–4 eindeutige Run-Schlüssel erforderlich.');
+  return {kind,keys};
+}
+function keyValid(key) {return typeof key==='string'&&/^[a-z][a-z0-9_]*:run-[a-f0-9]{32}$/.test(key);}
+async function api(url) {
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+  try {
+    const response=await fetch(url,{method:'GET',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',signal:controller.signal,headers:{Accept:'application/json'}});
+    if(!response.ok) {
+      const e=new Error(response.status===404?'Run nicht gefunden.':response.status===409?'Run ungültig: Integritätsprüfung fehlgeschlagen.':response.status===400?'Ungültige Anfrage. Bitte Auswahl oder Link prüfen.':'Datenabruf fehlgeschlagen (HTTP '+response.status+').');
+      e.safe=true;throw e;
+    }
+    return await response.json();
+  } catch(e) {
+    if(e.safe) throw e;
+    const error=new Error('Daten nicht verfügbar. Netzwerk oder API-Antwort prüfen und erneut versuchen.');error.safe=true;throw error;
+  } finally {clearTimeout(timer);}
+}
+function showError(message,retry) {
+  const root=$('error-box');root.replaceChildren();const box=el('div',null,'notice error');
+  box.append(el('p',message));const button=el('button','Erneut versuchen');button.type='button';button.addEventListener('click',retry);box.append(button);root.append(box);announce(message);
+}
+function fillFilter(id,values,label) {
+  const select=$(id),previous=select.value;select.replaceChildren();const all=el('option',label);all.value='';select.append(all);
+  [...new Set(values.filter(v=>typeof v==='string'&&v))].sort().forEach(value=>{const opt=el('option',value);opt.value=value;select.append(opt);});
+  select.value=values.includes(previous)?previous:'';
+}
+async function loadOverview() {
+  const serial=++state.overviewSerial;$('run-list').setAttribute('aria-busy','true');$('run-list').replaceChildren(el('p','Runs werden geladen …','loading'));announce('Übersicht wird geladen …');
+  // Discard stale metrics and selection eligibility during revalidation.
+  const previous=new Set(state.selected);state.runs=[];state.selected.clear();updateSelection();
+  try {
+    const data=await api('/api/experiments');if(serial!==state.overviewSerial)return false;
+    if(data.read_only!==true||!Array.isArray(data.runs)||!Array.isArray(data.sources)||!Array.isArray(data.errors)) throw new Error('schema');
+    state.runs=data.runs;
+    const valid=new Set(state.runs.filter(selectable).map(r=>r.key));previous.forEach(k=>{if(valid.has(k))state.selected.add(k);});
+    fillFilter('model-filter',state.runs.map(r=>r.model_kind),'Alle Modelle');fillFilter('status-filter',state.runs.map(r=>r.status),'Alle Status');fillFilter('source-filter',data.sources.map(s=>s.id),'Alle Quellen');
+    state.overviewWarnings=data.errors;state.overviewError=null;
+    renderRuns();$('error-box').replaceChildren();warnings($('error-box'),data.errors);
+    announce(state.runs.length+' Runs geladen.'+(previous.size!==state.selected.size?' Nicht mehr gültige Auswahl entfernt.':''));return true;
+  } catch(e) {
+    if(serial!==state.overviewSerial)return false;
+    state.runs=[];state.selected.clear();state.overviewWarnings=[];renderRuns();state.overviewError=e.safe?e.message:'Übersicht konnte nicht gelesen werden. API-Schema prüfen.';showError(state.overviewError,refreshAll);return false;
+  }
+}
+function setView(kind) {
+  $('overview-view').hidden=kind!=='overview';$('detail-view').hidden=kind!=='run';$('compare-view').hidden=kind!=='compare';
+}
+async function navigate(kind,keys=[]) {
+  const query=kind==='run'?'?run='+encodeURIComponent(keys[0]):kind==='compare'?'?compare='+encodeURIComponent(keys.join(',')):'';
+  history.pushState(null,'','/experiments'+query);return routeFromURL(true);
+}
+async function routeFromURL(focus=false) {
+  const serial=++state.routeSerial;$('detail-view').replaceChildren();$('compare-view').replaceChildren();
+  let route;
+  try {route=parseRoute(location.search);} catch(e) {setView('overview');showError(e.message,()=>navigate('overview'));return;}
+  if(route.kind==='overview') {
+    setView('overview');$('error-box').replaceChildren();warnings($('error-box'),state.overviewWarnings);
+    if(state.overviewError)showError(state.overviewError,refreshAll);else announce(filteredRuns().length+' von '+state.runs.length+' Runs sichtbar.');return;
+  }
+  setView(route.kind);$('error-box').replaceChildren();const root=$(route.kind==='run'?'detail-view':'compare-view');
+  root.setAttribute('aria-busy','true');root.append(el('p','Geprüfte Run-Daten werden geladen …','loading'));announce('Run-Daten werden geladen …');
+  try {
+    const url=route.kind==='run'?'/api/experiment?run='+encodeURIComponent(route.keys[0]):'/api/compare?'+route.keys.map(k=>'run='+encodeURIComponent(k)).join('&');
+    const data=await api(url);if(serial!==state.routeSerial)return;
+    if(route.kind==='run') {
+      if(!data.run||!data.config||!Object.prototype.hasOwnProperty.call(data,'signature')) throw new Error('schema');renderDetail(data);
+    } else {
+      if(typeof data.compatible!=='boolean'||!Array.isArray(data.runs)||!Array.isArray(data.details)||!Array.isArray(data.condition_differences)||!Array.isArray(data.parameter_differences))throw new Error('schema');
+      renderCompare(data);
+      state.selected=new Set(route.keys.filter(k=>state.runs.some(r=>r.key===k&&selectable(r))));updateSelection();
+    }
+    root.setAttribute('aria-busy','false');if(focus)root.focus();announce(route.kind==='run'?'Run-Details geladen.':'Vergleich geladen. Bedingungen vor Metriken prüfen.');
+  } catch(e) {
+    if(serial!==state.routeSerial)return;
+    root.replaceChildren();root.setAttribute('aria-busy','false');viewHeading(root,'Daten nicht verfügbar');
+    showError(e.safe?e.message:'Run-Daten konnten nicht gelesen werden. API-Schema prüfen.',()=>routeFromURL(true));
+  }
+}
+async function refreshAll() {
+  ++state.routeSerial;$('detail-view').replaceChildren();$('compare-view').replaceChildren();
+  const ok=await loadOverview();if(ok)await routeFromURL();
+}
+document.addEventListener('DOMContentLoaded',async()=>{
+  ['search','model-filter','status-filter','source-filter'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',()=>{renderRuns();announce(filteredRuns().length+' von '+state.runs.length+' Runs sichtbar.');}));
+  $('clear-selection').addEventListener('click',clearSelection);
+  $('compare-button').addEventListener('click',()=>{if(state.selected.size>=2&&state.selected.size<=4)navigate('compare',[...state.selected]);});
+  $('refresh-button').addEventListener('click',refreshAll);
+  $('overview-link').addEventListener('click',event=>{if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey&&event.button===0){event.preventDefault();navigate('overview');}});
+  window.addEventListener('popstate',()=>routeFromURL());
+  const loaded=await loadOverview();if(loaded||location.search)await routeFromURL();
+});
+
+</script>
+</body>
+</html>
