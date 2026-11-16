@@ -443,3 +443,39 @@ Desktop/390px/320px, Filter, Auswahlgrenzen, kompatible/inkompatible Vergleiche,
 Deep Links, Keyboard, Fehlerfälle und ausdrücklich markierte XSS-Text-Fixtures.
 Er verwendet ein separat installiertes Wheel außerhalb des Checkouts; PNGs,
 Konsole und Netzwerk sind eigenständige Nachweise zusätzlich zu pytest.
+
+## AP5: lokale Varianten und begrenzte Trainingsjobs
+
+Vertrag/Bedienung: [AP5_EXPERIMENT_CONTROL.md](AP5_EXPERIMENT_CONTROL.md).
+Tatsächliche Fits, Replay, Wheel und Grenzen: [AP5_RESULTS.md](AP5_RESULTS.md).
+
+```sh
+/home/hermes/workspace/.venvs/market-trader-ap3/bin/python -m pytest -q
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q
+/home/hermes/workspace/.venvs/market-trader-ap3/bin/python -m pytest -q \
+  tests/test_ap5_model.py tests/test_experiment_variants.py tests/test_ap5_cli.py \
+  tests/test_ap5_integration.py tests/test_experiment_jobs.py tests/test_experiment_registry.py
+```
+
+Stabiler Abschlussstand: **1.143 bestanden** mit Torch; **1.135 bestanden / 8
+reine Trainingstests übersprungen** ohne Torch/NumPy. Die neuen Tests decken
+strikte v3-Snapshots und MLP-JSON v2, echte synthetische variable Fits/Reload,
+Legacy-Semantik, kausale Fenster, tatsächliche Architekturtexte, v3-SMA-Bedingungen,
+verifizierte Parent-Pläne, eindeutige höchstens vier Varianten und Auswahl nach
+Validierungs-RMSE ab. Bool/int-Aliase dürfen keine Provenienzprüfung passieren.
+
+Lifecycle-Tests müssen echte Subprozesse ergänzen, nicht nur simulierte Exitcodes:
+FIFO-basierten Abbruch/Wall-Timeout, nativen CPU-Hardkill plus gewöhnlichen
+SIGKILL, Controller-Tod, geerbte Workerflocks, TERM→KILL, Queuekapazität und
+Exception-Rollback. Crashfenster vor Config-/pending-/running-Publikation prüfen;
+Run-Besitz muss schon im Allocation-Hook dauerhaft feststehen. Unveröffentlichte
+Anlagen nicht als completed erfinden und unbeteiligte gleiche Konfigurationen
+nicht über Hashsuche übernehmen. Kernel-CPU-Accounting muss sich auf den exakten
+Child beziehen, nicht auf aggregate RUSAGE_CHILDREN-Werte.
+
+Die reale Abnahme bleibt auf vier vorab begrenzte Fits außerhalb Git beschränkt.
+Keine Fixtures als Marktresultate ausgeben, keine 2025-Features/-Metriken, keine
+alten Registries/Live-Reports verändern. Wiederholungen brauchen frische Beleg-
+und Ausgabepfade sowie ein neu freigegebenes tatsächliches Trainingsbudget.
+Der installierte Wheel-Kontext wird außerhalb des Checkouts geprüft; echte
+Modell-/Prognosegleichheit von abweichenden Git-/Lock-Metadaten unterscheiden.

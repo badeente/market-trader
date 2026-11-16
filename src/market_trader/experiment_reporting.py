@@ -7,7 +7,7 @@ import json
 def enrich_experiment_report(report: bytes, *, summary: dict) -> bytes:
     """Show the actual snapshot, forecast and reconciled trade metrics, not AP1 labels."""
     config = summary['config']
-    if config['version'] == 2:
+    if config['version'] in (2, 3):
         return _enrich_ap3_report(report, summary)
     minutes = summary['comparison_signature']['interval_microseconds'] // 60_000_000
     heading = f"AP2 — {config['name']}"
@@ -68,7 +68,8 @@ def _enrich_ap3_report(report, summary):
                         if neural else 'Ridge predictions and errors use original return units.')
     minutes = summary['comparison_signature']['interval_microseconds'] // 60_000_000
     training, strategy, costs = (config[key] for key in ('training', 'strategy', 'execution'))
-    metadata = ('<section class="panel" id="ap3-experiment"><h1>' + escape('AP3 — ' + config['name'])
+    stage = 'AP5' if config['version'] == 3 else 'AP3'
+    metadata = ('<section class="panel" id="ap3-experiment"><h1>' + escape(stage + ' — ' + config['name'])
         + '</h1><p>' + escape(config['hypothesis'])
         + '</p><p>Training 2021–2023; validation 2024 only. ' + selection
         + '2025 bleibt reserviert; '
@@ -99,10 +100,14 @@ def _enrich_ap3_report(report, summary):
                    ('trade_count', 'net_points', 'reference_points', 'modeled_cost_points', 'max_drawdown_points')))
          for key, label in (('mlp', 'MLP'), ('ridge', 'Ridge'), ('sma_timed', 'SMA timed'))
          if key in summary['trading']))
-    metadata += '<h2>Fixed model parameters</h2>' + _settings_table('ap3-model-settings', config['model'])
+    title = 'Model parameters' if config['version'] == 3 else 'Fixed model parameters'
+    metadata += '<h2>' + title + '</h2>' + _settings_table('ap3-model-settings', config['model'])
     if config['model']['kind'] == 'mlp':
         fitted = summary['training']
-        metadata += ('<p>MLP 4 → 16 → 8 → 1; 225 trainable parameters. '
+        architecture = config['model']['layers'] if config['version'] == 3 else [4,16,8,1]
+        parameters = sum((inputs + 1) * outputs for inputs, outputs in zip(architecture[:-1], architecture[1:], strict=True))
+        description = 'MLP ' + ' → '.join(map(str, architecture)) + f'; {parameters} trainable parameters. '
+        metadata += ('<p>' + escape(description) +
             'Input and target scalers fitted only on training rows. Ridge reference alpha 0.1.</p>'
             '<h2>Actual training and selection</h2><p>'
             + escape(f"Best epoch {fitted['best_epoch']}; epochs run {len(fitted['epoch_history'])}; "

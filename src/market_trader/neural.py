@@ -1,4 +1,4 @@
-"""Frozen AP3 MLP: safe JSON and stdlib inference; Torch is training-only."""
+"""Versioned AP3/AP5 MLP: safe JSON and stdlib inference; Torch trains only."""
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -13,11 +13,13 @@ from market_trader._dataset_codec import decode_record, json_bytes, parse_json, 
 from market_trader.baseline import (
     _TRAINING_METADATA, _checked_split, _error_metrics, _number, _read_training_data,
 )
+from market_trader.experiment_config import canonical_model_settings
 from market_trader.training_data import (
     FEATURE_NAMES, OPEN_TARGET_NAME, OPEN_TRAINING_DATA_FORMAT, TrainingConfig,
 )
 
 MLP_FORMAT = "market-trader.mlp-validation.v1"
+MLP_FORMAT_V2 = "market-trader.mlp-validation.v2"
 _ARCHITECTURE = [4, 16, 8, 1]
 _START = datetime(2021, 1, 1, tzinfo=UTC)
 _VALIDATION_START = datetime(2024, 1, 1, tzinfo=UTC)
@@ -88,7 +90,15 @@ def _identifier(value: object) -> None:
         raise ValueError("expected a sha256 identifier")
 
 
-def _config(config: TrainingConfig, interval: object) -> None:
+def _config(config: TrainingConfig, interval: object, *, configurable=False) -> None:
+    if configurable:
+        if (type(interval) is not int or interval != _INTERVAL
+                or type(config.lookback_bars) is not int or config.lookback_bars < 2
+                or type(config.horizon_bars) is not int or config.horizon_bars < 1
+                or config.lookback_bars + config.horizon_bars + 1 > 34
+                or config.validation_start != _VALIDATION_START or config.test_start != _TEST_START):
+            raise ValueError('invalid configurable MLP causal configuration')
+        return
     if (type(interval) is not int or interval != _INTERVAL or config.lookback_bars != 8
             or config.horizon_bars != 2 or config.validation_start != _VALIDATION_START
             or config.test_start != _TEST_START):
@@ -113,14 +123,16 @@ def _vector(value: object, size: int, field: str) -> tuple[float, ...]:
     return tuple(_model_number(x, field) for x in value)
 
 
-def _decode_model(value: object) -> MLPModel:
+def _decode_model(value: object, architecture=None) -> MLPModel:
+    architecture = _ARCHITECTURE if architecture is None else architecture
+    parameter_count = sum((a+1)*b for a,b in zip(architecture[:-1], architecture[1:]))
     data = record_object(value, ("kind", "architecture", "parameter_count", "means", "scales",
                                  "target_mean", "target_scale", "layers"))
-    if (data["kind"] != "mlp" or data["architecture"] != _ARCHITECTURE
+    if (data["kind"] != "mlp" or data["architecture"] != architecture
             or not isinstance(data["architecture"], list)
             or any(type(x) is not int for x in data["architecture"])
-            or type(data["parameter_count"]) is not int or data["parameter_count"] != 225):
-        raise ValueError("unsupported MLP architecture; expected 225 parameters")
+            or type(data["parameter_count"]) is not int or data["parameter_count"] != parameter_count):
+        raise ValueError(f"unsupported MLP architecture; expected {parameter_count} parameters")
     means = _vector(data["means"], 4, "means")
     scales = _vector(data["scales"], 4, "scales")
     target_mean = _model_number(data["target_mean"], "target_mean")
@@ -130,7 +142,7 @@ def _decode_model(value: object) -> MLPModel:
     if not isinstance(data["layers"], list) or len(data["layers"]) != 3:
         raise ValueError("model must contain three dense layers")
     layers = []
-    for layer, inputs, outputs in zip(data["layers"], _ARCHITECTURE[:-1], _ARCHITECTURE[1:], strict=True):
+    for layer, inputs, outputs in zip(data["layers"], architecture[:-1], architecture[1:], strict=True):
         layer = record_object(layer, ("weights", "biases"))
         if not isinstance(layer["weights"], list) or len(layer["weights"]) != outputs:
             raise ValueError("model weights have an invalid shape")
@@ -139,7 +151,7 @@ def _decode_model(value: object) -> MLPModel:
     return MLPModel(means, scales, target_mean, target_scale, tuple(layers))
 
 
-def _validate_training(value: object) -> datetime:
+def _validate_training(value: object, model_settings=None) -> datetime:
     training = record_object(value, _TRAINING_FIELDS)
     _positive_integer(training["row_count"], "training row_count")
     stamps = []
@@ -152,17 +164,19 @@ def _validate_training(value: object) -> datetime:
         stamps.append(stamp)
     if not _START <= stamps[0] <= stamps[1] < _VALIDATION_START:
         raise ValueError("training timestamps must lie in 2021–2023")
-    settings = record_object(training["fit_settings"], (*_SETTINGS, "seed"))
+    policy = _SETTINGS if model_settings is None else model_settings
+    settings = record_object(training["fit_settings"], (*policy, "seed"))
     if type(settings["seed"]) is not int or not 0 <= settings["seed"] < 2**63:
         raise ValueError("seed must be an integer in [0, 2**63)")
-    for key, expected in _SETTINGS.items():
+    for key, expected in policy.items():
         if type(settings[key]) is not type(expected) or settings[key] != expected:
             raise ValueError(f"unsupported frozen fit setting: {key}")
+    numeric = _SETTINGS if model_settings is None else {**model_settings, "min_delta": float(model_settings["min_delta"])}
     versions = record_object(training["runtime_versions"], ("python", "torch", "numpy"))
     if any(not isinstance(x, str) or not x or x != x.strip() for x in versions.values()):
         raise ValueError("runtime versions must be nonempty strings")
     history = training["epoch_history"]
-    if not isinstance(history, list) or not 1 <= len(history) <= 100:
+    if not isinstance(history, list) or not 1 <= len(history) <= numeric["max_epochs"]:
         raise ValueError("epoch history must contain 1–100 epochs")
     losses = []
     significant_best, stale = float("inf"), 0
@@ -175,17 +189,17 @@ def _validate_training(value: object) -> datetime:
                 raise ValueError("losses must be nonnegative")
         loss = epoch["validation_mse"]
         losses.append(loss)
-        if loss < significant_best - _SETTINGS["min_delta"]:
+        if loss < significant_best - numeric["min_delta"]:
             significant_best, stale = loss, 0
         else:
             stale += 1
-        if stale >= 10 and index != len(history):
+        if stale >= numeric["patience"] and index != len(history):
             raise ValueError("history continues past early stopping")
     best = _positive_integer(training["best_epoch"], "best_epoch")
     if best != losses.index(min(losses)) + 1:
         raise ValueError("best_epoch must identify the actual best validation checkpoint")
-    expected_reason = "early_stopping" if stale >= 10 else "max_epochs"
-    if training["stopping_reason"] != expected_reason or (stale < 10 and len(history) != 100):
+    expected_reason = "early_stopping" if stale >= numeric["patience"] else "max_epochs"
+    if training["stopping_reason"] != expected_reason or (stale < numeric["patience"] and len(history) != numeric["max_epochs"]):
         raise ValueError("stopping reason does not match the epoch history")
     return stamps[1]
 
@@ -202,7 +216,7 @@ def _validate_metrics(value: object) -> None:
 def _read_report(path: Path) -> dict:
     saved = record_object(parse_json(path.read_text(encoding="utf-8"), allow_floats=True),
                           ("format", "report_id", "training_data_id", "model", "training", "validation", *_TRAINING_METADATA))
-    if saved["format"] != MLP_FORMAT:
+    if saved["format"] not in (MLP_FORMAT, MLP_FORMAT_V2):
         raise ValueError("unsupported MLP report format")
     body = {key: value for key, value in saved.items() if key != "report_id"}
     if saved["report_id"] != "sha256:" + sha256(json_bytes(body)).hexdigest():
@@ -219,10 +233,20 @@ def _decode_saved(saved: dict) -> SavedMLPModel:
     if not isinstance(instrument, str) or not instrument or instrument != instrument.strip():
         raise ValueError("model instrument must be nonempty and unpadded")
     config = decode_record(saved["config"], TrainingConfig)
-    _config(config, saved["interval_microseconds"])
-    last = _validate_training(saved["training"])
+    configurable = saved['format'] == MLP_FORMAT_V2
+    model_settings = None
+    if configurable:
+        training = saved['training']
+        if not isinstance(training, dict) or not isinstance(training.get('fit_settings'), dict):
+            raise ValueError('invalid training fit settings')
+        model_settings = canonical_model_settings(
+            {k: v for k, v in training['fit_settings'].items() if k != 'seed'}, snapshot=True)
+        if model_settings['kind'] != 'mlp':
+            raise ValueError('MLP report requires mlp settings')
+    _config(config, saved['interval_microseconds'], configurable=configurable)
+    last = _validate_training(saved['training'], model_settings)
     _validate_metrics(saved["validation"])
-    return SavedMLPModel(saved["report_id"], _decode_model(saved["model"]), instrument,
+    return SavedMLPModel(saved["report_id"], _decode_model(saved["model"], None if model_settings is None else model_settings["layers"]), instrument,
                          timedelta(microseconds=saved["interval_microseconds"]), config, last, saved["target_name"])
 
 
@@ -243,13 +267,13 @@ def _score(model: MLPModel, rows: tuple) -> dict:
             "zero_return": _error_metrics(targets)}
 
 
-def _prepare(path: Path) -> tuple:
+def _prepare(path: Path, *, configurable=False) -> tuple:
     artifact, config, duration = _read_training_data(path)
     if artifact["format"] != OPEN_TRAINING_DATA_FORMAT or artifact["target_name"] != OPEN_TARGET_NAME:
         raise ValueError("MLP requires Open-to-Open training data")
     if artifact["splits"]["test"] != []:
         raise ValueError("MLP requires an empty test split; exclude 2025 before feature preparation")
-    _config(config, artifact["interval_microseconds"])
+    _config(config, artifact["interval_microseconds"], configurable=configurable)
     train = _checked_split(artifact["splits"]["train"], name="train", start=_START,
                            cutoff=config.validation_start, duration=duration,
                            availability_delay=timedelta(minutes=15))
@@ -259,7 +283,10 @@ def _prepare(path: Path) -> tuple:
     return artifact, train, validation
 
 
-def _fit(train: tuple, validation: tuple, seed: int) -> tuple[dict, dict]:
+def _fit(train: tuple, validation: tuple, seed: int, settings=None) -> tuple[dict, dict]:
+    policy = _SETTINGS if settings is None else {**settings,
+        **{key: float(settings[key]) for key in ('learning_rate', 'weight_decay', 'min_delta')}}
+    architecture = _ARCHITECTURE if settings is None else settings['layers']
     # Importing this module, loading JSON, and predicting never reach this import.
     import torch
     from importlib.metadata import version
@@ -293,18 +320,18 @@ def _fit(train: tuple, validation: tuple, seed: int) -> tuple[dict, dict]:
         torch.random.default_generator.manual_seed(seed)
         generator = torch.Generator(device="cpu").manual_seed(seed)
         network = torch.nn.Sequential(
-            torch.nn.Linear(4, 16, dtype=torch.float64, device="cpu"), torch.nn.ReLU(),
-            torch.nn.Linear(16, 8, dtype=torch.float64, device="cpu"), torch.nn.ReLU(),
-            torch.nn.Linear(8, 1, dtype=torch.float64, device="cpu"),
+            torch.nn.Linear(4, architecture[1], dtype=torch.float64, device="cpu"), torch.nn.ReLU(),
+            torch.nn.Linear(architecture[1], architecture[2], dtype=torch.float64, device="cpu"), torch.nn.ReLU(),
+            torch.nn.Linear(architecture[2], 1, dtype=torch.float64, device="cpu"),
         )
-        optimizer = torch.optim.AdamW(network.parameters(), lr=0.001, weight_decay=0.0001)
+        optimizer = torch.optim.AdamW(network.parameters(), lr=policy["learning_rate"], weight_decay=policy["weight_decay"])
         history, best_state = [], None
         best_loss, significant_best, stale, best_epoch = float("inf"), float("inf"), 0, 0
         reason = "max_epochs"
-        for epoch in range(1, 101):
+        for epoch in range(1, policy["max_epochs"] + 1):
             network.train()
             permutation = torch.randperm(len(train), generator=generator, device="cpu")
-            for batch in permutation.split(128):
+            for batch in permutation.split(policy["batch_size"]):
                 optimizer.zero_grad(set_to_none=True)
                 loss = torch.nn.functional.mse_loss(network(x[batch]), y[batch])
                 loss.backward()
@@ -321,20 +348,20 @@ def _fit(train: tuple, validation: tuple, seed: int) -> tuple[dict, dict]:
             if validation_loss < best_loss:
                 best_loss, best_epoch = validation_loss, epoch
                 best_state = {name: tensor.detach().clone() for name, tensor in network.state_dict().items()}
-            if validation_loss < significant_best - 1e-6:
+            if validation_loss < significant_best - policy["min_delta"]:
                 significant_best, stale = validation_loss, 0
             else:
                 stale += 1
-            if stale >= 10:
+            if stale >= policy["patience"]:
                 reason = "early_stopping"
                 break
         network.load_state_dict(best_state)
         network.eval()
         layers = [{"weights": layer.weight.detach().tolist(), "biases": layer.bias.detach().tolist()}
                   for layer in network if isinstance(layer, torch.nn.Linear)]
-        model = {"kind": "mlp", "architecture": list(_ARCHITECTURE), "parameter_count": 225,
+        model = {"kind": "mlp", "architecture": list(architecture), "parameter_count": sum((a+1)*b for a,b in zip(architecture[:-1], architecture[1:])),
                  **scalers, "layers": layers}
-        training = {"fit_settings": {**_SETTINGS, "seed": seed}, "epoch_history": history,
+        training = {"fit_settings": {**(_SETTINGS if settings is None else settings), "seed": seed}, "epoch_history": history,
                     "best_epoch": best_epoch, "stopping_reason": reason,
                     "runtime_versions": {"python": platform.python_version(), "torch": str(torch.__version__),
                                          "numpy": version("numpy")}}
@@ -345,15 +372,20 @@ def _fit(train: tuple, validation: tuple, seed: int) -> tuple[dict, dict]:
         torch.use_deterministic_algorithms(deterministic, warn_only=warn_only)
 
 
-def mlp_report(training_path: Path, *, seed: int = 0) -> dict:
-    """Fit the frozen CPU MLP on training only; select and score on validation."""
+def mlp_report(training_path: Path, *, seed: int = 0, settings: dict | None = None) -> dict:
+    """Fit CPU MLP; None keeps AP3/v1, complete canonical settings opt into AP5/v2."""
     if type(seed) is not int or not 0 <= seed < 2**63:
         raise ValueError("seed must be an integer in [0, 2**63)")
-    artifact, train, validation = _prepare(training_path)
-    model_data, fit = _fit(train, validation, seed)
+    if settings is not None:
+        settings = canonical_model_settings(settings, snapshot=True)
+        if settings['kind'] != 'mlp':
+            raise ValueError('MLP training requires mlp settings')
+    artifact, train, validation = _prepare(training_path, configurable=settings is not None)
+    model_data, fit = (_fit(train, validation, seed) if settings is None
+                       else _fit(train, validation, seed, settings))
     # Official metrics run through exactly the JSON decoder used at reload.
-    predictor = _decode_model(model_data)
-    report = {"format": MLP_FORMAT, "training_data_id": artifact["training_data_id"],
+    predictor = _decode_model(model_data, None if settings is None else settings["layers"])
+    report = {"format": MLP_FORMAT if settings is None else MLP_FORMAT_V2, "training_data_id": artifact["training_data_id"],
               **{key: artifact[key] for key in _TRAINING_METADATA}, "model": model_data,
               "training": {"row_count": len(train), "first_decision_at": train[0].decision_at.isoformat(),
                            "last_target_available_at": max(row.target_available_at for row in train).isoformat(), **fit},
@@ -365,8 +397,8 @@ def mlp_report(training_path: Path, *, seed: int = 0) -> dict:
 
 def mlp_validation_evaluation(model_path: Path, training_path: Path) -> tuple[dict, list[dict]]:
     """Score validation only with verified JSON weights; never fit or expose held-out data."""
-    artifact, train, validation = _prepare(training_path)
     saved = _read_report(model_path)
+    artifact, train, validation = _prepare(training_path, configurable=saved["format"] == MLP_FORMAT_V2)
     predictor = _decode_saved(saved)
     if saved["training_data_id"] != artifact["training_data_id"]:
         raise ValueError("model training data identifier does not match the input artifact")

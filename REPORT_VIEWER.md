@@ -113,6 +113,20 @@ the display identifies this and totals still come from the complete saved data.
 2024 is development/selection data and 2025 remains reserved. An incompatible
 comparison is descriptive only, never a fair ranking or profit recommendation.
 
+## AP5 publication
+
+The accepted AP5-capable wheel was published internally on 16 November 2026
+after separate authorization. The service keeps AP2/AP3 sources and adds
+`ap5=/home/hermes/workspace/var/market-trader/experiments/ap5-acceptance-v1`.
+Filter the overview by source `ap5` for the declared learning-rate variants and
+replay. The copied reference parent is provenance, not an additional fit.
+
+The HTTP surface remains read-only. AP5 training jobs are local CLI operations
+in the isolated training environment, not website buttons or server commands.
+The serving environment still requires neither Torch nor NumPy. Existing
+LAN/VPN rules and report URLs are preserved; rollback and live verification
+are documented in [AP5_RESULTS.md](AP5_RESULTS.md).
+
 ## Generate and publish
 
 Generate backtest JSON outside the served directory, then render a new report

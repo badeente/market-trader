@@ -173,8 +173,17 @@ def _verify_artifacts(directory, *, record=None, returned=None):
 
 
 def register_run(root: Path, payload: dict, *, executor: Callable[[Path], dict],
-                 parent_id: str | None = None) -> dict:
-    """Claim a new run, snapshot the opaque config, execute and persist results."""
+                 parent_id: str | None = None,
+                 on_allocated: Callable[[Path], None] | None = None) -> dict:
+    """Claim a new run, snapshot the opaque config, execute and persist results.
+
+    Optional ownership hook runs after exclusive directory allocation but before
+    ANY config/record publication. It must persist ownership before returning.
+    If it fails (or is killed), no unfinished run has been published; an empty
+    claimed directory is safe and ignored by list_runs. Existing executors and
+    callers without a hook retain their original lifecycle and signatures.
+    This ordering covers process interruption, not cross-file power-loss ACID.
+    """
     if type(payload) is not dict:
         raise TypeError("config payload must be a JSON object")
     snapshot = _encode(payload)
@@ -186,6 +195,8 @@ def register_run(root: Path, payload: dict, *, executor: Callable[[Path], dict],
     run_id = "run-" + uuid4().hex
     directory = root / run_id
     directory.mkdir(mode=0o700)
+    if on_allocated is not None:
+        on_allocated(directory)
     with (directory / "config.json").open("xb") as stream:
         stream.write(snapshot)
     record = {

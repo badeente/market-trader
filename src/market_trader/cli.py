@@ -408,6 +408,40 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--left", required=True, help="First completed run ID")
             command.add_argument("--right", required=True, help="Second completed run ID")
 
+    for operation in ('derive', 'sweep'):
+        variant = experiment_commands.add_parser(operation, help='Derive a validated variant or bounded sweep plan')
+        variant.add_argument('--registry', type=Path, required=True)
+        variant.add_argument('--run-id', required=True)
+        variant.add_argument('--name', required=True)
+        variant.add_argument('--hypothesis', required=True)
+        variant.add_argument('--set', dest='changes', action='append', default=[], metavar='FIELD=JSON')
+        variant.add_argument('--output', type=Path, required=True)
+        if operation == 'sweep':
+            variant.add_argument('--grid', type=Path, required=True)
+
+    job = experiment_commands.add_parser('job', help='Bounded local training queue; no browser mutation')
+    job_commands = job.add_subparsers(dest='job_action', required=True)
+    for operation in ('submit', 'list', 'show', 'cancel', 'work', 'results'):
+        command = job_commands.add_parser(operation)
+        command.add_argument('--queue', type=Path, required=True)
+        if operation == 'submit':
+            command.add_argument('--registry', type=Path, required=True)
+            source = command.add_mutually_exclusive_group(required=True)
+            source.add_argument('--config', type=Path, help='Strict experiment TOML')
+            source.add_argument('--plan', type=Path, help='Verified derived variant or bounded sweep JSON')
+            source.add_argument('--replay-run', help='Queue an exact verified snapshot as a child run')
+            command.add_argument('--parent')
+            command.add_argument('--wall-seconds', type=int, default=300)
+            command.add_argument('--cpu-seconds', type=int, default=180)
+            command.add_argument('--memory-mib', type=int, default=4096)
+        elif operation in ('show', 'cancel'):
+            command.add_argument('--job-id', required=True)
+        elif operation == 'work':
+            command.add_argument('--max-jobs', type=int, default=1)
+            command.add_argument('--total-seconds', type=int, default=900)
+        elif operation == 'results':
+            command.add_argument('--job-id', action='append', required=True)
+
     args = parser.parse_args(argv)
     try:
         if args.action == "experiment":

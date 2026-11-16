@@ -81,6 +81,36 @@ def test_register_persists_private_snapshot_lifecycle_and_small_summary(tmp_path
     assert api.load_config_snapshot(root, run["run_id"])["model"]["alpha"] == "0.1"
 
 
+def test_allocation_hook_precedes_all_publication_and_preserves_executor_api(tmp_path):
+    api = registry()
+    claimed = []
+    def allocated(directory):
+        assert directory.is_dir()
+        assert list(directory.iterdir()) == []
+        assert api.list_runs(tmp_path) == []
+        claimed.append(directory)
+    def execute(output):
+        assert output == claimed[0] / 'artifacts'
+        assert api.read_run(tmp_path, output.parent.name)['status'] == 'running'
+        return synthetic_executor(output)
+    run = api.register_run(tmp_path, payload(), executor=execute, on_allocated=allocated)
+    assert run['status'] == 'completed'
+    assert len(claimed) == 1 and claimed[0].name == run['run_id']
+
+
+def test_failed_allocation_hook_cannot_publish_unowned_unfinished_run(tmp_path):
+    api = registry()
+    claimed = []
+    def allocated(directory):
+        claimed.append(directory)
+        raise RuntimeError('ownership persistence failed')
+    with pytest.raises(RuntimeError, match='ownership persistence failed'):
+        api.register_run(tmp_path, payload(), executor=synthetic_executor, on_allocated=allocated)
+    assert len(claimed) == 1
+    assert list(claimed[0].iterdir()) == []
+    assert api.list_runs(tmp_path) == []
+
+
 @pytest.mark.parametrize("error", [ValueError("executor failed"), KeyboardInterrupt(), SystemExit(9)])
 def test_executor_failure_persists_status_log_and_reraises_original(tmp_path, error):
     api = registry()

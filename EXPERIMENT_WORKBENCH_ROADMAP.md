@@ -57,6 +57,8 @@ Die HTML-Galerie um strukturierte Run-Ansichten erweitern: Datensatz/Zeitraum, M
 
 ### AP5 — Komfortables Variieren, Neu-Training und begrenztes Tuning
 
+**Lokaler Funktionsumfang technisch abgeschlossen und real abgenommen; unabhängige Schlussreviews ohne offene Befunde.** Varianten/Replay, v3-Modellparameter, private budgetierte CLI-Queue und deklarative Vergleiche bis vier Varianten: [AP5_EXPERIMENT_CONTROL.md](AP5_EXPERIMENT_CONTROL.md). Vier begrenzte echte Fits, bytegleiches Replay, 1.143 Tests und isoliertes Wheel: [AP5_RESULTS.md](AP5_RESULTS.md). Browser-Jobsteuerung bleibt ausdrücklich zurückgestellt. Nach separater Git-/Veröffentlichungsfreigabe ist die AP5-Sammlung intern lesend erreichbar; Live-HTTP, zweiter LAN-Rechner und Desktop-/Handy-Browser erfolgreich geprüft. Keine automatische AP6- oder neue Trainingsfreigabe.
+
 Aus einem bestehenden Run eine neue Konfiguration ableiten. Lernrate, Modellgröße, Regularisierung, Lookback, Trainingsdauer und Daten-/Featureversion bewusst als unterschiedliche Änderungskategorien behandeln. Einfache manuelle Varianten zuerst, danach kleine deklarative Parametersuchen. Modellparameter, Handelsregeln und Hyperparametersuche unterscheiden. Vor Browser-Start/Abbruch eine echte Job-Schicht mit Warteschlange, Zuständen, erlaubten Parametern, Ressourcen-/Zeitbudget, Zugriffsschutz und CSRF-Schutz bereitstellen; den heutigen lesenden Viewer nicht einfach zu einem Kommando-Endpunkt machen.
 
 **Abnahme:** Ein neuer Run kann mit validierten Parametern gestartet und nachvollziehbar verfolgt werden. Parent, Änderungen, Fehler/Abbruch und Budget bleiben sichtbar. Keine unkontrollierten Trainingsschleifen; Auswahl anhand Validierung, nicht finalem Test.

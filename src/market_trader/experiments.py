@@ -28,6 +28,28 @@ def replay_experiment(registry: Path, run_id: str) -> dict:
 def dispatch_experiment(args) -> dict | list:
     from market_trader.experiment_registry import list_runs, read_run, compare_runs
 
+    if args.experiment_action == 'job':
+        from market_trader.experiment_control import dispatch_job
+        return dispatch_job(args)
+    if args.experiment_action in ('derive', 'sweep'):
+        from market_trader.experiment_variants import derive_variant, prepare_sweep, read_document
+        from market_trader.experiment_registry import _decode, _encode
+        from market_trader.storage import publish_new_file
+        changes = {}
+        for assignment in args.changes:
+            field, separator, value = assignment.partition('=')
+            if not separator or field in changes:
+                raise ValueError('Changes require unique FIELD=JSON assignments')
+            changes[field] = _decode(value.encode('utf-8'))
+        if args.experiment_action == 'derive':
+            result = derive_variant(args.registry, args.run_id, changes, name=args.name, hypothesis=args.hypothesis)
+        else:
+            result = prepare_sweep(args.registry, args.run_id, read_document(args.grid),
+                                   name=args.name, hypothesis=args.hypothesis, fixed_changes=changes)
+        if args.output.exists() or args.output.is_symlink():
+            raise FileExistsError('Variant output already exists')
+        publish_new_file(args.output, _encode(result))
+        return result
     if args.experiment_action == 'run':
         return run_experiment(args.config, args.registry, parent_id=args.parent)
     if args.experiment_action == 'replay':

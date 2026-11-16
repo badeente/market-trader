@@ -130,7 +130,8 @@ def execute_experiment(config: ExperimentConfig, output: Path) -> dict:
             _write_json(stage / 'ridge-validation-evaluation.json', ridge_evaluation)
             _write_json(stage / 'ridge-validation-predictions.json', ridge_points)
             model_path = stage / 'mlp-model.json'
-            model_report = mlp_report(training_path, seed=config.seed)
+            model_report = (mlp_report(training_path, seed=config.seed, settings=snapshot['model'])
+                            if config.version == 3 else mlp_report(training_path, seed=config.seed))
             _write_json(model_path, model_report)
             if load_mlp_model(model_path).target_name != OPEN_TARGET_NAME:
                 raise ValueError('incompatible AP3 model target')
@@ -172,6 +173,11 @@ def execute_experiment(config: ExperimentConfig, output: Path) -> dict:
                        'test_start': _TEST.isoformat(), 'test_end': _END.isoformat()},
             'execution': asdict(profile), 'quantity': '1', 'contract_multiplier': '1',
             'runtime': runtime}
+        if config.version == 3:
+            # AP5 explicitly classifies these benchmark-rule settings as conditions.
+            # Preserve legacy v1/v2 signature semantics rather than reinterpreting old runs.
+            signature['reference_strategy'] = {'sma_fast_period': config.sma_fast_period,
+                                                'sma_slow_period': config.sma_slow_period}
         summary = {'format': 'market-trader.ap2-summary.v1', 'name': config.name,
             'hypothesis': config.hypothesis, 'seed': config.seed, 'config': snapshot,
             'training_rows': len(training.train), 'validation_rows': len(training.validation),

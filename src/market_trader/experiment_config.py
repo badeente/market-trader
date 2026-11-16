@@ -1,4 +1,4 @@
-"""Strict AP2 v1 and AP3 v2 configuration; AP1's policy is not changed.
+"""Strict AP2 v1, frozen AP3 v2 and configurable AP5 v3 configuration.
 
 Root TOML keys: version, name, hypothesis, seed, source_csv, source_sha256.
 Optional tables: training (lookback_bars, horizon_bars), strategy
@@ -8,7 +8,8 @@ model (kind only: ridge or mlp); snapshots record its complete fixed settings.
 Version 1 still rejects model. Numeric execution/threshold inputs may be TOML
 numbers or decimal strings; snapshots encode them as exact decimal strings.
 Dates and size are fixed; MLP also fixes eight-bar/two-bar features/target and
-SMA 4/8 to the approved first reference. No neural hyperparameter tuning.
+SMA 4/8 to the approved first reference in v2. Explicit v3 supports bounded
+model/training controls and causal lookback/horizon; snapshots remain complete.
 """
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -36,6 +37,7 @@ class ExperimentConfig:
     price_tick: Decimal = Decimal('0.001')
     initial_capital: Decimal = Decimal('100000')
     model_kind: str = 'ridge'
+    model_settings: dict | None = None
 
 
 def _model_settings(kind):
@@ -49,6 +51,42 @@ def _model_settings(kind):
             'loss': 'standardized_target_mse', 'input_scaler': 'train_only_standard',
             'target_scaler': 'train_only_standard', 'device': 'cpu', 'dtype': 'float64',
             'threads': 1, 'deterministic': True}
+
+
+def canonical_model_settings(value, *, snapshot=False):
+    """Validate AP5 settings and return the complete canonical model policy."""
+    if not isinstance(value, dict) or value.get('kind') not in ('mlp', 'ridge'):
+        raise ValueError('model.kind must be ridge or mlp')
+    expected = _model_settings(value['kind'])
+    adjustable = {'layers', 'learning_rate', 'weight_decay', 'batch_size',
+                  'max_epochs', 'patience', 'min_delta'} if value['kind'] == 'mlp' else set()
+    _table(value, 'model', expected if snapshot else adjustable | {'kind'})
+    result = {**expected, **value}
+    if value['kind'] == 'mlp':
+        layers = result['layers']
+        if (type(layers) is not list or len(layers) != 4
+                or any(type(x) is not int for x in layers)
+                or layers[0] != 4 or layers[-1] != 1
+                or any(not 4 <= x <= 64 for x in layers[1:3])):
+            raise ValueError('model.layers must be [4, H1, H2, 1], widths 4–64')
+        for key, low, high in [('batch_size', 16, 512), ('max_epochs', 1, 100), ('patience', 1, 20)]:
+            number = _integer(result[key], key, low)
+            if number > high:
+                raise ValueError(f'{key} must not exceed {high}')
+        for key, low, high in [('learning_rate', '0.00001', '0.01'),
+                               ('weight_decay', '0', '0.1'), ('min_delta', '0', '0.01')]:
+            number = _decimal(result[key], key)
+            if not Decimal(low) <= number <= Decimal(high):
+                raise ValueError(f'{key} out of range')
+            result[key] = str(number)
+    if snapshot and (value.keys() != expected.keys()
+                     or any(type(value[k]) is not type(result[k]) for k in result)
+                     or value != result):
+        raise ValueError('snapshot must contain the complete canonical model settings')
+    for key in expected.keys() - adjustable:
+        if type(result[key]) is not type(expected[key]) or result[key] != expected[key]:
+            raise ValueError(f'unsupported fixed model setting: {key}')
+    return result
 
 
 def _table(value, label, allowed):
@@ -84,15 +122,16 @@ def _parse(body, base, *, snapshot=False):
     if not isinstance(body, dict):
         raise ValueError('experiment must be a table')
     version = body.get('version')
-    if type(version) is not int or version not in (1, 2):
-        raise ValueError('experiment version must be the integer 1 or 2')
+    if type(version) is not int or version not in (1, 2, 3):
+        raise ValueError('experiment version must be the integer 1, 2 or 3')
     _table(body, 'experiment', ('version', 'name', 'hypothesis', 'seed', 'source_csv',
                                'source_sha256', 'training', 'strategy', 'execution',
-                               *(('model',) if version == 2 else ())))
+                               *(('model',) if version >= 2 else ())))
     required = {'version', 'name', 'hypothesis', 'seed', 'source_csv', 'source_sha256'}
     if required - body.keys():
         raise ValueError(f'missing experiment fields: {sorted(required - body.keys())}')
     kind = 'ridge'
+    model = None
     if version == 2:
         model = _table(body.get('model'), 'model',
                        _model_settings('mlp').keys() | _model_settings('ridge').keys() if snapshot else ('kind',))
@@ -104,6 +143,9 @@ def _parse(body, base, *, snapshot=False):
                 or any(type(model[key]) is not type(value) for key, value in expected.items())
                 or (kind == 'mlp' and any(type(value) is not int for value in model['layers']))):
             raise ValueError('snapshot must contain the complete fixed model settings')
+    if version == 3:
+        model = canonical_model_settings(body.get('model'), snapshot=snapshot)
+        kind = model['kind']
     for key in ('name', 'hypothesis', 'source_csv'):
         value = body[key]
         if not isinstance(value, str) or not value or value != value.strip():
@@ -112,6 +154,8 @@ def _parse(body, base, *, snapshot=False):
     if not isinstance(checksum, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', checksum):
         raise ValueError('source_sha256 must be an exact lowercase sha256 identifier')
     seed = _integer(body['seed'], 'seed', 0)
+    if version == 3 and seed >= 2**63:
+        raise ValueError('seed must be an integer in [0, 2**63)')
     training = _table(body.get('training', {}), 'training', ('lookback_bars', 'horizon_bars'))
     strategy = _table(body.get('strategy', {}), 'strategy',
                       ('entry_threshold', 'sma_fast_period', 'sma_slow_period'))
@@ -132,12 +176,13 @@ def _parse(body, base, *, snapshot=False):
              for key, value in defaults.items()}
     if costs['commission_rate'] >= 1:
         raise ValueError('commission_rate must be less than 1')
-    if kind == 'mlp' and (lookback, horizon, fast, slow) != (8, 2, 4, 8):
+    if version == 2 and kind == 'mlp' and (lookback, horizon, fast, slow) != (8, 2, 4, 8):
         raise ValueError('AP3 mlp requires lookback 8, horizon 2 and SMA 4/8')
     return ExperimentConfig(version, body['name'], body['hypothesis'], seed,
                             (base / body['source_csv']).resolve(), checksum,
                             lookback, horizon, _decimal(strategy.get('entry_threshold', '0'), 'entry_threshold'),
-                            fast, slow, **costs, model_kind=kind)
+                            fast, slow, **costs, model_kind=kind,
+                            model_settings=model if version == 3 else None)
 
 
 def read_experiment_config(path: Path) -> ExperimentConfig:
@@ -158,8 +203,11 @@ def experiment_config_payload(config: ExperimentConfig) -> dict:
                          'sma_fast_period': config.sma_fast_period, 'sma_slow_period': config.sma_slow_period},
             'execution': {key: str(getattr(config, key)) for key in
                           ('spread', 'slippage', 'commission_rate', 'price_tick', 'initial_capital')}}
-    if config.version == 2:
-        payload['model'] = _model_settings(config.model_kind)
+    if config.version >= 2:
+        payload['model'] = (canonical_model_settings(config.model_settings if config.model_settings is not None else _model_settings(config.model_kind), snapshot=True)
+                            if config.version == 3 else _model_settings(config.model_kind))
+        if payload['model']['kind'] != config.model_kind:
+            raise ValueError('model settings kind mismatch')
     return payload
 
 

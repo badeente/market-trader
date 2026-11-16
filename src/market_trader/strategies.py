@@ -299,7 +299,8 @@ def load_frozen_model(path: Path, *, expected_kind: str | None = None):
     if not isinstance(artifact, dict):
         raise ValueError("model JSON must be an object")
     formats = {BASELINE_FORMAT: "ridge", OPEN_BASELINE_FORMAT: "ridge",
-               "market-trader.mlp-validation.v1": "mlp"}
+               "market-trader.mlp-validation.v1": "mlp",
+               "market-trader.mlp-validation.v2": "mlp"}
     artifact_format = artifact.get("format")
     if not isinstance(artifact_format, str):
         raise ValueError("model artifact format must be a string")
