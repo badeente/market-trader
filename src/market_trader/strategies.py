@@ -263,7 +263,8 @@ def _learned_long(
             # The exit order needs a later candle in the same session to fill at its open.
             if session is None or decision.at + duration >= session.close_time:
                 return _HOLD
-        prediction = saved.model.predict(candle_features(decision.window))
+        prediction = (saved.predict_window(decision.window, decision_at=decision.at)
+                      if name == "cnn_long" else saved.model.predict(candle_features(decision.window)))
         return entry if Decimal(str(prediction)) > threshold else _HOLD
 
     return decide
@@ -292,6 +293,9 @@ def _configure_ridge_long(table: dict, _price_tick: Decimal, config_dir: Path) -
 
 def load_frozen_model(path: Path, *, expected_kind: str | None = None):
     """Dispatch only explicitly supported JSON artifacts; inference needs no Torch."""
+    if expected_kind == 'cnn':
+        from market_trader.image_neural import load_cnn_model
+        return load_cnn_model(path)
     try:
         artifact = parse_json(path.read_text(encoding="utf-8"), allow_floats=True)
     except ValueError as error:
@@ -300,7 +304,8 @@ def load_frozen_model(path: Path, *, expected_kind: str | None = None):
         raise ValueError("model JSON must be an object")
     formats = {BASELINE_FORMAT: "ridge", OPEN_BASELINE_FORMAT: "ridge",
                "market-trader.mlp-validation.v1": "mlp",
-               "market-trader.mlp-validation.v2": "mlp"}
+               "market-trader.mlp-validation.v2": "mlp",
+               "market-trader.cnn-validation.v1": "cnn"}
     artifact_format = artifact.get("format")
     if not isinstance(artifact_format, str):
         raise ValueError("model artifact format must be a string")
@@ -312,6 +317,9 @@ def load_frozen_model(path: Path, *, expected_kind: str | None = None):
         raise ValueError("model kind does not match the artifact format")
     if kind == "ridge":
         return load_ridge_model(path)
+    if kind == "cnn":
+        from market_trader.image_neural import load_cnn_model
+        return load_cnn_model(path)
     from market_trader.training_data import OPEN_TARGET_NAME
     if artifact.get("target_name") != OPEN_TARGET_NAME:
         raise ValueError("MLP model target must be next-open to horizon-open")
@@ -336,7 +344,25 @@ def _configure_mlp_long(table: dict, _price_tick: Decimal, config_dir: Path) -> 
                               lambda dataset: _learned_long(saved, threshold, entry, dataset, name="mlp_long"))
 
 
+def _configure_cnn_long(table: dict, _price_tick: Decimal, config_dir: Path) -> ConfiguredStrategy:
+    require_fields(table, "strategy", "name", "model_report", "entry_threshold", "quantity")
+    model_report = table['model_report']
+    if not isinstance(model_report, str) or not model_report or model_report != model_report.strip():
+        raise ValueError('strategy.model_report must be a nonempty path without padding')
+    threshold = config_decimal(table['entry_threshold'], 'strategy.entry_threshold')
+    quantity = _fixed_quantity(table['quantity'])
+    if threshold < 0:
+        raise ValueError('strategy.entry_threshold must be nonnegative')
+    saved = load_frozen_model(config_dir/model_report, expected_kind='cnn')
+    entry = Signal(Action.ENTER_LONG, quantity=quantity)
+    parameters = (('model_report_id', saved.report_id), ('entry_threshold', threshold),
+                  ('quantity', quantity), ('horizon_bars', saved.config.horizon_bars))
+    return ConfiguredStrategy('cnn_long', saved.config.lookback_bars, parameters,
+                              lambda dataset: _learned_long(saved, threshold, entry, dataset, name='cnn_long'))
+
+
 _REGISTRY = {
+    "cnn_long": _configure_cnn_long,
     "mlp_long": _configure_mlp_long,
     "single_long": _configure_single_long,
     "sma_crossover": _configure_sma_crossover,

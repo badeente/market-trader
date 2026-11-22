@@ -516,3 +516,41 @@ Artefakte und dieselbe Vorschau. Chromium dekodiert alle 64 PNGs pixelgleich zum
 unabhängigen Decoder; Desktop/390px/320px und Tastatur-/Detailansichten sind
 separat geprüft. Dieser begrenzte Audit-Satz ersetzt keinen vollständigen
 AP7-Trainingsdatensatz und erteilt keine Trainings-/Veröffentlichungsfreigabe.
+
+## AP7: volle Bildkohorte und visuelles Referenznetz
+
+Vertrag: [AP7_VISUAL_REFERENCE.md](AP7_VISUAL_REFERENCE.md); tatsächliche
+Ergebnisse/Abnahme: [AP7_RESULTS.md](AP7_RESULTS.md). Die kanonische v4-Konfiguration
+steht in `configs/ap7-cnn-reference.toml`; v1–v3 werden nicht neu interpretiert.
+
+Vollständig ausgeführte, **sequentielle** Suiten auf dem eingefrorenen Stand:
+**1.460 bestanden mit Torch**, **1.445 bestanden / 15 optionale Skips ohne Torch**.
+Lange Vollsuiten als überwachte Hintergrundprozesse mit eigenen Logs und echten
+Exitcodes ausführen; ein Transport-Zeitlimit ist kein Testsuite-Ergebnis.
+
+```sh
+/home/hermes/workspace/.venvs/market-trader-review/bin/python -m pytest -q \
+  tests/test_ap7_config.py tests/test_ap7_integration.py tests/test_cnn_settings.py \
+  tests/test_image_pixels_v1.py tests/test_image_training_data.py tests/test_image_neural.py \
+  tests/test_ap7_reporting.py tests/test_ap7_trade_audit.py tests/test_ap7_workbench.py
+```
+
+Diese Tests bleiben synthetisch. Echte Fits benötigen das eingefrorene Budget;
+bei der Abnahme wurden genau zwei CNN-Fits plus zwei Ridge-Kontrollfits, kein MLP
+und keine Suche ausgeführt. 18.528 Trainings-/6.192 Validierungsbeispiele wurden
+vollständig abgeglichen; 2025 bleibt für Modelleingaben/Bewertung ausgeschlossen.
+Der Erstlauf und sein Replay liefern 27 bytegleiche Artefakte.
+
+Das separat installierte Wheel ohne Torch/NumPy muss alle 6.192 tatsächlichen
+PNG-/Fensterprognosen bitgleich rekonstruieren, die train-only Zielskalierung
+unabhängig nachrechnen und identische Berichtsbytes/Bildauditdaten erzeugen.
+Gemessene Framework-/Stdlib-Parität wird zusätzlich über alle Validierungszeilen
+protokolliert; keine universelle Plattform-Gleichheit aus Seeds ableiten.
+
+Die reale Browserabnahme prüft Desktop sowie 390px/320px, echte CNN-Historie,
+kompatibles Erstlauf-/Replaypaar, abgewiesene AP5-/CNN-Vergleichbarkeit,
+Berichtsbytes und die ersten acht chronologischen ausgeführten Trades samt
+PNG-Browserpixeln, gespeicherter Prognose und Ledgerbindung. Read-only-, Host-,
+Traversal-/JSON-Abweisung und unveränderte Forschungsinventare bleiben Pflicht.
+Die Bildauditansicht ist absichtlich technisch/metadatenreich; sie ist keine
+Salienz-/Attributionsdarstellung und nicht der Trainingsinput.

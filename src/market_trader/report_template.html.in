@@ -276,7 +276,7 @@
   function forecastDetail(prediction) {
     const block = element("div", undefined, "prediction");
     const list = element("dl");
-    block.append(element("h3", prediction.model_kind === "mlp" ? "MLP entry signal" : "Ridge entry signal"), list);
+    block.append(element("h3", prediction.model_kind === "cnn" ? "CNN entry signal" : prediction.model_kind === "mlp" ? "MLP entry signal" : "Ridge entry signal"), list);
     metric(list, "Predicted return", bp(prediction.forecast));
     metric(list, "Entry threshold", bp(prediction.threshold));
     const inputs = element("div", undefined, "inputs");

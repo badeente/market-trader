@@ -103,8 +103,11 @@ def _forecast_summary(evaluation: Path | None, model: Path | None, training_data
     if training_data is not None and model is None:
         raise ValueError("--training-data requires --model")
     if model is not None and (training_data is not None or evaluation is not None):
-        if not isinstance(load_frozen_model(model), SavedRidgeModel):
-            raise ValueError("MLP does not support legacy held-out evaluation; use the validation experiment report")
+        saved_model = load_frozen_model(model)
+        if not isinstance(saved_model, SavedRidgeModel):
+            from market_trader.image_neural import SavedCNNModel
+            kind = "CNN" if isinstance(saved_model, SavedCNNModel) else "MLP"
+            raise ValueError(f"{kind} does not support legacy held-out evaluation; use the validation experiment report")
     saved = None
     if evaluation is not None:
         saved = _read_report(evaluation, HELD_OUT_FORMAT)
@@ -141,7 +144,10 @@ def _explain_model_trades(run: dict, model, dataset_path: Path) -> None:
     stored = load_dataset(dataset_path)
     dataset = stored.dataset
     strategy = run["strategy"]
-    expected_name = "ridge_long" if isinstance(model, SavedRidgeModel) else "mlp_long"
+    from market_trader.image_neural import SavedCNNModel
+    cnn = isinstance(model, SavedCNNModel)
+    kind = "cnn" if cnn else "ridge" if isinstance(model, SavedRidgeModel) else "mlp"
+    expected_name = kind + "_long"
     if strategy["name"] != expected_name:
         raise ValueError("model kind does not match the primary backtest strategy")
     if strategy.get("horizon_bars") != model.config.horizon_bars:
@@ -172,12 +178,14 @@ def _explain_model_trades(run: dict, model, dataset_path: Path) -> None:
             session = calendar.session_at(window[0].open_time)
             if session is None or at + model.interval * model.config.horizon_bars >= session.close_time:
                 raise ValueError("trade entry is not eligible for a same-session timed exit")
-        values = candle_features(window)
-        forecast = model.model.predict(values)
+        values = () if cnn else candle_features(window)
+        forecast = model.predict_window(window, decision_at=at) if cnn else model.model.predict(values)
         if Decimal(str(forecast)) <= threshold:
             raise ValueError("reconstructed model forecast does not exceed the trade's entry threshold")
         nonlinear = not isinstance(model, SavedRidgeModel)
-        if nonlinear:
+        if cnn:
+            inputs = []
+        elif nonlinear:
             inputs = [{"name": name, "value": str(value)}
                       for name, value in zip(FEATURE_NAMES, values, strict=True)]
         else:
@@ -190,7 +198,7 @@ def _explain_model_trades(run: dict, model, dataset_path: Path) -> None:
             )
         trade["prediction"] = {
             "at": at.isoformat(), "forecast": forecast, "threshold": float(threshold), "inputs": inputs,
-            "model_kind": "mlp" if nonlinear else "ridge",
+            "model_kind": kind,
             "attribution": "nonlinear_no_additive_attribution" if nonlinear else "linear_additive",
         }
 

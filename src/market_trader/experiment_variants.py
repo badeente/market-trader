@@ -28,6 +28,8 @@ def derive_variant(registry: Path, run_id: str, changes: dict, *, name: str, hyp
         raise ValueError('Expected nonempty supported variant fields')
     record, original = _verified_record(Path(registry), run_id)
     experiment_config_from_payload(original)
+    if original.get('model', {}).get('kind') == 'cnn':
+        raise ValueError('CNN variants and sweeps are unsupported in the fixed AP7 reference')
     payload = deepcopy(original)
     model_changes = any(field.startswith('model.') for field in changes)
     mlp_window = (payload.get('model', {}).get('kind') == 'mlp'

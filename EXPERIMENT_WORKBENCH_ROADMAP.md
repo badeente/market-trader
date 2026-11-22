@@ -73,6 +73,8 @@ Chartbilder aus denselben kausalen Fenstern und Zielen erzeugen. Renderer, Aussc
 
 ### AP7 — Bildmodell in denselben Experimentablauf integrieren
 
+**Technisch abgenommen, intern veröffentlicht und von Andreas mit „Sieht gut aus“ bestätigt am 22. November 2026. Der abschließende Commit/Push wurde anschließend freigegeben.** Volle Kohorte (18.528 Training/6.192 Validierung), tatsächliches 5.409-Parameter-CNN, zwei budgetierte reale Fits mit 27 bytegleichen Artefakten, 1.460 Tests mit Torch bzw. 1.445/15 ohne, unabhängige Reviews und installiertes frameworkfreies Reload aller Prognosen sind grün. Live-Desktop/390px/320px, erste acht echte Tradebilder mit Pixelprüfung und zweiter LAN-Host geprüft. Bekannte schmale UI-/Audit-Dichte-Grenzen sind dokumentiert; kein Profitabilitätsbeleg, 2025 bleibt reserviert. Ergebnisse: [AP7_RESULTS.md](AP7_RESULTS.md). Website- und abschließende Git-Freigabe wurden separat erteilt; AP8 ist nicht freigegeben.
+
 Ein kleines Bildnetz auf dem vereinbarten Ziel trainieren und als neuen Modelltyp in den vorhandenen Runner integrieren. Kein zweiter Backtester und keine separate Kontoführung. Numerische und visuelle Modelle auf gleichen eligible Entscheidungen, Zeiträumen und Kosten vergleichen; verbleibende unterschiedliche Informationsmengen explizit ausweisen.
 
 **Abnahme:** Trainieren, Speichern, Inferenz, Backtest und Webseitenvergleich funktionieren für Zahlen- und Bildmodell. Die Webseite zeigt zu einem Trade das betrachtete Bild und die zugehörige Prognose.

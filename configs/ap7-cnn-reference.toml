@@ -1,0 +1,10 @@
+# AP7 fixed visual reference; no parameter search or held-out 2025 scoring.
+version = 4
+name = "AP7 causal chart CNN reference"
+hypothesis = "Evaluate one fixed 5409-parameter image CNN against Ridge and zero forecasts and existing ledger controls; aligned windows but different input representations."
+seed = 0
+source_csv = "../../../var/market-trader/raw/dukascopy-deuidxeur-2021-2025-v1/deuidxeur-2021-01-01-2026-01-01-m15-bid-utc.csv"
+source_sha256 = "sha256:d7c694f295a863076b4b00ceb0a2adfbeed6f1b0458a2098a52cd171e24cef2f"
+
+[model]
+kind = "cnn"

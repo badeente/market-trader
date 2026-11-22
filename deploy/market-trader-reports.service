@@ -7,7 +7,7 @@ StartLimitBurst=10
 [Service]
 Type=simple
 WorkingDirectory=%h/workspace/var/market-trader
-ExecStart=%h/workspace/.venvs/market-trader-web/bin/market-trader serve-reports --directory %h/workspace/var/market-trader/reports --bind 10.10.1.136 --port 8086 --allow-network 10.10.1.0/24 --allow-network 10.6.0.0/24 --registry ap2=%h/workspace/var/market-trader/experiments/ap2-acceptance-v2 --registry ap3=%h/workspace/var/market-trader/experiments/ap3-acceptance-v2 --registry ap5=%h/workspace/var/market-trader/experiments/ap5-acceptance-v1
+ExecStart=%h/workspace/.venvs/market-trader-web/bin/market-trader serve-reports --directory %h/workspace/var/market-trader/reports --bind 10.10.1.136 --port 8086 --allow-network 10.10.1.0/24 --allow-network 10.6.0.0/24 --registry ap2=%h/workspace/var/market-trader/experiments/ap2-acceptance-v2 --registry ap3=%h/workspace/var/market-trader/experiments/ap3-acceptance-v2 --registry ap5=%h/workspace/var/market-trader/experiments/ap5-acceptance-v1 --registry ap7=%h/workspace/var/market-trader/experiments/ap7-acceptance-20261118-v1
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONDONTWRITEBYTECODE=1

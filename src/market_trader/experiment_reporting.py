@@ -7,6 +7,8 @@ import json
 def enrich_experiment_report(report: bytes, *, summary: dict) -> bytes:
     """Show the actual snapshot, forecast and reconciled trade metrics, not AP1 labels."""
     config = summary['config']
+    if config['version'] == 4:
+        return _enrich_ap7_report(report, summary)
     if config['version'] in (2, 3):
         return _enrich_ap3_report(report, summary)
     minutes = summary['comparison_signature']['interval_microseconds'] // 60_000_000
@@ -130,6 +132,54 @@ def _enrich_ap3_report(report, summary):
              '#ap3-experiment table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}'
              '#ap3-experiment th,#ap3-experiment td{text-align:left;vertical-align:top;'
              'padding:.45rem .65rem;border-bottom:1px solid var(--border);white-space:nowrap}</style>')
+    if '<main>' in html:
+        html = html.replace('<main>', '<main>' + style + metadata, 1)
+    else:
+        html = html.replace('<body>', '<body><main>' + style + metadata + '</main>', 1)
+    return html.encode('utf-8')
+
+
+def _enrich_ap7_report(report, summary):
+    """CNN-specific disclosure; never substitute tabular feature explanations."""
+    config, fitted = summary['config'], summary['training']
+    if config['model']['kind'] != 'cnn':
+        raise ValueError('v4 reporting requires CNN')
+    metadata = ('<section class="panel" id="ap7-experiment"><h1>'
+        + escape('AP7 — ' + config['name']) + '</h1><p>' + escape(config['hypothesis'])
+        + '</p><p>Training 2021–2023; 2024 is development/selection data (checkpoint selection), '
+          'not an independent final test. 2025 remains reserved; test metrics not computed.</p>'
+          '<p>CNN: RGB CHW[3,24,32] → valid Conv3x3[4,22,30] → ReLU → '
+          'AvgPool2[4,11,15] → Flatten660 → Linear8 → ReLU → Linear1; 5409 parameters.</p>'
+          '<p>Original 256×192 RGB PNG; fixed 8×8 block averages to 32×24 RGB, divided by 255. '
+          'Pixel reduction discards wick/detail information. Aligned windows and targets do not imply '
+          'equivalent information to tabular inputs. Target scaler fits training rows only; '
+          'CNN forecasts are inverse target-transformed before scoring and trading. '
+          'Nonlinear image model: no additive four-feature contributions.</p>'
+          '<h2>Validation forecast — original return units, displayed in basis points</h2>')
+    forecast = summary['validation_forecast']
+    metadata += '<p>' + escape(f"Common cohort: {forecast['row_count']} rows; first {forecast['first_decision_at']}; last {forecast['last_decision_at']}.") + '</p>'
+    metadata += _table('ap7-forecast', ('Model', 'MAE (bp)', 'RMSE (bp)'),
+        ((label, _bp(forecast[key]['mae']), _bp(forecast[key]['rmse']))
+         for key, label in (('cnn', 'CNN'), ('ridge', 'Ridge'), ('zero_return', 'Zero'))))
+    metadata += '<h2>Reconciled trading — points per unit, not forecast quality</h2>'
+    metadata += _table('ap7-trading', ('Strategy', 'Trades', 'Net points', 'Reference points', 'Modeled cost points', 'Max drawdown points'),
+        ((label, *(summary['trading'][key][field] for field in ('trade_count', 'net_points', 'reference_points', 'modeled_cost_points', 'max_drawdown_points')))
+         for key, label in (('cnn', 'CNN'), ('ridge', 'Ridge'), ('sma_timed', 'SMA timed'))))
+    metadata += ('<p>Hypothetical research costs; synthetic Q, not EUR. Bid source with symmetric spread offsets, '
+        'not historical ask fills. Complete-observed-session selection may introduce bias.</p>'
+        '<h2>Actual CNN training and selection</h2><p>'
+        + escape(f"Best epoch {fitted['best_epoch']}; epochs run {len(fitted['epoch_history'])}; stopping reason {fitted['stopping_reason']}; seed {config['seed']}.")
+        + '</p>' + _settings_table('ap7-fit-settings', fitted['fit_settings'])
+        + _table('ap7-training-history', ('Epoch', 'Training MSE', 'Validation MSE'),
+            ((row['epoch'], row.get('train_mse', row.get('training_mse')), row['validation_mse']) for row in fitted['epoch_history']))
+        + '<details><summary>Canonical configuration and reproduction identities</summary><pre>'
+        + escape(json.dumps({'config': config, **{key: summary[key] for key in
+            ('training_data_id', 'source_training_data_id', 'model_report_id', 'validation_dataset_id', 'runtime')}}, sort_keys=True, indent=2))
+        + '</pre></details></section>')
+    html = report.decode('utf-8')
+    if '<body>' not in html:
+        raise ValueError('existing report has no body insertion point')
+    style = '<style>#ap7-experiment .ap3-table-scroll{overflow-x:auto;max-width:100%}#ap7-experiment td,#ap7-experiment th{padding:.4rem;text-align:left}#ap7-experiment pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>'
     if '<main>' in html:
         html = html.replace('<main>', '<main>' + style + metadata, 1)
     else:

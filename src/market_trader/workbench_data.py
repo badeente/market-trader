@@ -268,11 +268,24 @@ class WorkbenchData:
         if any(point[0] is None for point in curves['equity']):
             warnings.append('Initial account snapshot has no timestamp (initial capital).')
         training = None
-        if row['model_kind'] == 'mlp':
+        if row['model_kind'] == 'cnn':
+            warnings.extend([
+                '2024 is development/selection data (checkpoint selection), not an independent final test; 2025 remains reserved.',
+                'CNN image representation: fixed 8×8 block averages reduce 256×192 RGB to 32×24; wick/detail information is discarded. Aligned targets do not imply equivalent tabular information.',
+            ])
+        if row['model_kind'] in ('mlp', 'cnn'):
             history = registry._read_json(output / 'training-history.json')
             epochs = history['epoch_history']
             if not isinstance(epochs, list) or not epochs:
                 raise ValueError('Missing actual epoch history')
+            if row['model_kind'] == 'cnn':
+                if any(not isinstance(epoch, dict) for epoch in epochs):
+                    raise ValueError('Invalid actual CNN epoch history')
+                for field in ('epoch_history', 'best_epoch', 'stopping_reason'):
+                    if history[field] != summary['training'].get(field):
+                        raise ValueError('CNN training history does not match summary')
+                epochs = [{**epoch, 'training_mse': epoch.get('train_mse', epoch.get('training_mse'))}
+                          for epoch in epochs]
             for index, epoch in enumerate(epochs, 1):
                 if not isinstance(epoch, dict) or type(epoch.get('epoch')) is not int or epoch['epoch'] != index:
                     raise ValueError('Invalid epoch sequence')
@@ -280,6 +293,9 @@ class WorkbenchData:
                     _number(epoch[field], nonnegative=True)
             if type(history['best_epoch']) is not int or not 1 <= history['best_epoch'] <= len(epochs):
                 raise ValueError('Invalid best epoch')
+            if row['model_kind'] == 'cnn' and history['best_epoch'] != min(
+                    range(1, len(epochs) + 1), key=lambda index: _number(epochs[index-1]['validation_mse'])):
+                raise ValueError('CNN best epoch is not actual minimum validation MSE')
             if not isinstance(history['stopping_reason'], str):
                 raise ValueError('Invalid stopping reason')
             training = dict(history=[{field: epoch[field] for field in

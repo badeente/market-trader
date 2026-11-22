@@ -63,6 +63,9 @@ def execute_experiment(config: ExperimentConfig, output: Path) -> dict:
         raise FileExistsError(f'experiment output already exists: {output}')
     # Reject manually constructed invalid configs too, before import or output writes.
     config = experiment_config_from_payload(experiment_config_payload(config))
+    if config.version == 4:
+        from market_trader.image_experiment_pipeline import execute_image_experiment
+        return execute_image_experiment(config, output)
     snapshot = experiment_config_payload(config)
     runtime = _runtime()
     # Metadata lookup is identical for both choices and never imports Torch/NumPy.

@@ -122,8 +122,8 @@ def _parse(body, base, *, snapshot=False):
     if not isinstance(body, dict):
         raise ValueError('experiment must be a table')
     version = body.get('version')
-    if type(version) is not int or version not in (1, 2, 3):
-        raise ValueError('experiment version must be the integer 1, 2 or 3')
+    if type(version) is not int or version not in (1, 2, 3, 4):
+        raise ValueError('experiment version must be the integer 1, 2, 3 or 4')
     _table(body, 'experiment', ('version', 'name', 'hypothesis', 'seed', 'source_csv',
                                'source_sha256', 'training', 'strategy', 'execution',
                                *(('model',) if version >= 2 else ())))
@@ -146,6 +146,12 @@ def _parse(body, base, *, snapshot=False):
     if version == 3:
         model = canonical_model_settings(body.get('model'), snapshot=snapshot)
         kind = model['kind']
+    if version == 4:
+        from market_trader.cnn_settings import canonical_cnn_settings
+        if not isinstance(body.get('model'), dict) or body['model'].get('kind') != 'cnn':
+            raise ValueError('AP7 v4 requires explicit model.kind cnn')
+        model = canonical_cnn_settings(body['model'], snapshot=snapshot)
+        kind = 'cnn'
     for key in ('name', 'hypothesis', 'source_csv'):
         value = body[key]
         if not isinstance(value, str) or not value or value != value.strip():
@@ -154,7 +160,9 @@ def _parse(body, base, *, snapshot=False):
     if not isinstance(checksum, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', checksum):
         raise ValueError('source_sha256 must be an exact lowercase sha256 identifier')
     seed = _integer(body['seed'], 'seed', 0)
-    if version == 3 and seed >= 2**63:
+    if version == 4 and seed != 0:
+        raise ValueError('AP7 reference CNN requires seed 0')
+    if version in (3, 4) and seed >= 2**63:
         raise ValueError('seed must be an integer in [0, 2**63)')
     training = _table(body.get('training', {}), 'training', ('lookback_bars', 'horizon_bars'))
     strategy = _table(body.get('strategy', {}), 'strategy',
@@ -178,11 +186,13 @@ def _parse(body, base, *, snapshot=False):
         raise ValueError('commission_rate must be less than 1')
     if version == 2 and kind == 'mlp' and (lookback, horizon, fast, slow) != (8, 2, 4, 8):
         raise ValueError('AP3 mlp requires lookback 8, horizon 2 and SMA 4/8')
+    if version == 4 and (lookback, horizon, fast, slow) != (8, 2, 4, 8):
+        raise ValueError('AP7 cnn requires lookback 8, horizon 2 and SMA 4/8')
     return ExperimentConfig(version, body['name'], body['hypothesis'], seed,
                             (base / body['source_csv']).resolve(), checksum,
                             lookback, horizon, _decimal(strategy.get('entry_threshold', '0'), 'entry_threshold'),
                             fast, slow, **costs, model_kind=kind,
-                            model_settings=model if version == 3 else None)
+                            model_settings=model if version in (3, 4) else None)
 
 
 def read_experiment_config(path: Path) -> ExperimentConfig:
@@ -194,7 +204,7 @@ def read_experiment_config(path: Path) -> ExperimentConfig:
 
 def experiment_config_payload(config: ExperimentConfig) -> dict:
     """Canonical JSON-friendly configuration, including every configurable default."""
-    if config.model_kind not in ('ridge', 'mlp') or (config.version == 1 and config.model_kind != 'ridge'):
+    if config.model_kind not in (('cnn',) if config.version == 4 else ('ridge', 'mlp')) or (config.version == 1 and config.model_kind != 'ridge'):
         raise ValueError('model kind is incompatible with experiment version')
     payload = {'version': config.version, 'name': config.name, 'hypothesis': config.hypothesis,
             'seed': config.seed, 'source_csv': str(config.source_csv), 'source_sha256': config.source_sha256,
@@ -204,8 +214,13 @@ def experiment_config_payload(config: ExperimentConfig) -> dict:
             'execution': {key: str(getattr(config, key)) for key in
                           ('spread', 'slippage', 'commission_rate', 'price_tick', 'initial_capital')}}
     if config.version >= 2:
-        payload['model'] = (canonical_model_settings(config.model_settings if config.model_settings is not None else _model_settings(config.model_kind), snapshot=True)
-                            if config.version == 3 else _model_settings(config.model_kind))
+        if config.version == 4:
+            from market_trader.cnn_settings import canonical_cnn_settings
+            payload['model'] = canonical_cnn_settings(
+                config.model_settings if config.model_settings is not None else canonical_cnn_settings(), snapshot=True)
+        else:
+            payload['model'] = (canonical_model_settings(config.model_settings if config.model_settings is not None else _model_settings(config.model_kind), snapshot=True)
+                                if config.version == 3 else _model_settings(config.model_kind))
         if payload['model']['kind'] != config.model_kind:
             raise ValueError('model settings kind mismatch')
     return payload
