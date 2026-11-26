@@ -457,8 +457,35 @@ def main(argv: list[str] | None = None) -> int:
         elif operation == 'preview':
             command.add_argument('--output', type=Path, required=True, help='New standalone HTML outside the image bundle')
 
+    robustness = commands.add_parser('robustness', help='AP8A development diagnostics; no implicit fitting or reserved-year access')
+    robustness.set_defaults(action='robustness')
+    robustness_commands = robustness.add_subparsers(dest='robustness_action', required=True)
+    references = robustness_commands.add_parser('references', help='Verify the two frozen seed0 references without training')
+    study = robustness_commands.add_parser('study', help='Analyze four completed AP8 fits and reused seed0 references; never train')
+    study.add_argument('--registry',type=Path,required=True)
+    study.add_argument('--run-id',action='append',required=True)
+    study.add_argument('--output',type=Path,required=True)
+    for command in (references,study):
+        command.add_argument('--cnn-registry',type=Path,required=True)
+        command.add_argument('--cnn-run',required=True)
+        command.add_argument('--mlp-registry',type=Path,required=True)
+        command.add_argument('--mlp-run',required=True)
+
     args = parser.parse_args(argv)
     try:
+        if args.action == 'robustness':
+            try:
+                from market_trader.robustness_pipeline import reference_pair
+                pair=reference_pair(args.cnn_registry,args.cnn_run,args.mlp_registry,args.mlp_run)
+                if args.robustness_action=='references':
+                    result=pair.snapshot
+                else:
+                    from market_trader.robustness_pipeline import build_study
+                    result=build_study(pair,args.registry,args.run_id,args.output)
+                print(json.dumps(result,sort_keys=True,allow_nan=False))
+                return 0
+            except (OSError,ValueError,ArithmeticError,KeyError,TypeError) as error:
+                raise _CommandError(f'robustness {args.robustness_action}: {error}') from error
         if args.action == 'images':
             try:
                 if args.image_action == 'build':

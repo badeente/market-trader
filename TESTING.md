@@ -554,3 +554,32 @@ PNG-Browserpixeln, gespeicherter Prognose und Ledgerbindung. Read-only-, Host-,
 Traversal-/JSON-Abweisung und unveränderte Forschungsinventare bleiben Pflicht.
 Die Bildauditansicht ist absichtlich technisch/metadatenreich; sie ist keine
 Salienz-/Attributionsdarstellung und nicht der Trainingsinput.
+
+## AP8A: begrenzte Entwicklungs-Robustheitsstudie
+
+Vertrag: `AP8_ROBUSTNESS.md`; tatsächliche lokale Abnahme: `AP8_RESULTS.md`.
+Eingefrorene vollständige Suiten liefen sequenziell: **1.647 bestanden / 22
+optionale Skips ohne Torch**, **1.669 bestanden ohne Skips mit Torch**.
+Numerische Grenzfälle und die fünf semantischen Artefaktbindungen wurden vor
+den realen Fits unabhängig nachgeprüft. Checksummen allein ersetzen keine
+Modell-/Prognose-/Quellen-/History-/Ledgerprüfung.
+
+Genau vier genehmigte reale Fits (CNN/MLP Seeds 1/2) sind erfolgreich beendet;
+das Budget ist verbraucht. Keine automatische Wiederholung oder Neuausführung
+des privaten Gates/Controllers. Seed 0 wurde unverändert wiederverwendet.
+2024 bleibt checkpoint-selektierte Entwicklung, 2025 bleibt geschlossen.
+
+Das separate installierte AP8-Wheel ohne Torch/NumPy prüfte alle vier neuen
+Modelle über je 6.192 Validierungszeilen, rechnete train-only Skalierer sowie
+sämtliche Kostenledger nach und reproduzierte den kanonischen Bericht
+bytegleich, ohne neue Fits. Alle 50 Paketdateien stimmen mit dem Checkout
+überein. Unabhängiger tatsächlicher Artefaktreview: **274 Prüfungen bestanden**.
+
+Reale Browserprüfung gegen das vollständige Studien-JSON: 54 Prüfungen,
+18 Screenshots (Desktop/390px/320px). Der kanonische Originalbericht ist auf
+Handys trotz bestandener Geometrieprüfung schlecht lesbar. Die separate,
+außerhalb der unveränderlichen Studie erzeugte Darstellungsvorschau verwendet
+lokal scrollbar breite Tabellen; dieselben 54 Prüfungen/18 Screenshots sind
+auch dafür bestanden, ergänzt durch tatsächliche mobile Sichtprüfung.
+Original-/Vorschauhash und Nachweise stehen getrennt in `AP8_RESULTS.md`.
+Kein lokaler Browsercheck ist ein Nachweis einer AP8-Liveveröffentlichung.

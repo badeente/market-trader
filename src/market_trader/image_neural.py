@@ -128,7 +128,7 @@ def _seal(body):
     return {**body, 'report_id':'sha256:'+sha256(json_bytes(body)).hexdigest()}
 
 
-def _read_report(path):
+def _read_report(path, *, expected_format=CNN_FORMAT):
     # Open nonblocking before inspecting type: FIFOs/devices cannot stall loading.
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
@@ -145,7 +145,7 @@ def _read_report(path):
         'format','report_id','training_data_id','input_index_id','source_training_data_id',
         'dataset_id','dataset_artifact_id','instrument','interval_microseconds','target_name',
         'config','input_recipe','model','training','validation'))
-    if saved['format'] != CNN_FORMAT:
+    if saved['format'] != expected_format:
         raise ValueError('unsupported CNN report format')
     if saved['report_id'] != _seal({k:v for k,v in saved.items() if k != 'report_id'})['report_id']:
         raise ValueError('CNN report checksum mismatch')
@@ -196,7 +196,7 @@ def _history(value, policy):
     return losses.index(min(losses))+1, reason
 
 
-def _validate_training(value):
+def _validate_training(value, *, expected_seed=0):
     data = record_object(value, ('row_count','first_decision_at','last_target_available_at',
                                 'fit_settings','runtime_versions','epoch_history','best_epoch','stopping_reason','inference_parity'))
     _count(data['row_count'])
@@ -204,7 +204,7 @@ def _validate_training(value):
     if not _START <= first <= last < _VALIDATION:
         raise ValueError('training cutoff must be 2021–2023')
     policy = canonical_cnn_settings()
-    if not _exact(data['fit_settings'], {**policy, 'seed':0}):
+    if not _exact(data['fit_settings'], {**policy, 'seed':expected_seed}):
         raise ValueError('invalid frozen CNN fit settings or seed')
     versions = record_object(data['runtime_versions'], ('python','torch','numpy'))
     if any(type(v) is not str or not v or v != v.strip() or len(v) > 128 for v in versions.values()):
@@ -217,7 +217,7 @@ def _validate_training(value):
     return last
 
 
-def _decode_saved(saved):
+def _decode_saved(saved, *, expected_seed=0):
     from market_trader.image_pixels_v1 import image_input_recipe
     for field in ('report_id','training_data_id','input_index_id','source_training_data_id','dataset_id','dataset_artifact_id'):
         _identifier(saved[field])
@@ -233,7 +233,7 @@ def _decode_saved(saved):
     if (config.lookback_bars != 8 or config.horizon_bars != 2
             or config.validation_start != _VALIDATION or config.test_start != _END):
         raise ValueError('CNN requires frozen 8/2 2021–2024 configuration')
-    last = _validate_training(saved['training'])
+    last = _validate_training(saved['training'], expected_seed=expected_seed)
     metrics = record_object(saved['validation'], ('row_count','cnn','zero_return'))
     _count(metrics['row_count'])
     parity = record_object(saved['training']['inference_parity'], ('row_count','max_abs_error',
@@ -261,9 +261,19 @@ def load_cnn_model(path: Path) -> SavedCNNModel:
 
 
 def _fit(cache, train, validation, seed=0, settings=None, *, validation_predictions=None):
-    """Bounded uint16 memmap batches; no all-cohort floating-point inputs."""
+    """Frozen AP7 seed0 entry point; nonzero seeds require the AP8 API."""
     if type(seed) is not int or seed != 0:
         raise ValueError('CNN requires frozen seed 0')
+    return _fit_for_seed(cache, train, validation, seed, settings, expected_seed=0,
+                         validation_predictions=validation_predictions)
+
+
+def _fit_for_seed(cache, train, validation, seed, settings=None, *, expected_seed,
+                  validation_predictions=None):
+    """Same bounded AP7 kernel, with an explicitly checked initialization seed."""
+    if (type(seed) is not int or type(expected_seed) is not int
+            or expected_seed not in (0, 1, 2) or seed != expected_seed):
+        raise ValueError('CNN seed does not match the requested frozen run')
     policy = canonical_cnn_settings() if settings is None else canonical_cnn_settings(settings, snapshot=True)
     if not train or not validation or len(train)+len(validation) > 50000:
         raise ValueError('CNN requires bounded nonempty train/validation')
@@ -379,14 +389,17 @@ def _fit(cache, train, validation, seed=0, settings=None, *, validation_predicti
             best_epoch=best_epoch,stopping_reason=reason,inference_parity=parity,
             runtime_versions=dict(python=platform.python_version(),torch=str(torch.__version__),numpy=str(np.__version__)))
     finally:
-        if mapped is not None:
-            mapped._mmap.close()
-        random.setstate(python_rng)
-        np.random.set_state(numpy_rng)
-        torch.set_rng_state(rng)
-        torch.set_num_threads(threads)
-        torch.set_default_dtype(dtype)
-        torch.use_deterministic_algorithms(deterministic,warn_only=warn_only)
+        try:
+            if mapped is not None:
+                mapped._mmap.close()
+        finally:
+            # Cleanup I/O failure must not leak RNG or process-wide settings.
+            random.setstate(python_rng)
+            np.random.set_state(numpy_rng)
+            torch.set_rng_state(rng)
+            torch.set_num_threads(threads)
+            torch.set_default_dtype(dtype)
+            torch.use_deterministic_algorithms(deterministic,warn_only=warn_only)
 
 
 def _bindings(cohort):
